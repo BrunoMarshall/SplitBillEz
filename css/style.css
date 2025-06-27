@@ -81,7 +81,7 @@ main {
 }
 
 h2 {
-    font-family: 'Montserrat', sans-serifsans-serif;
+    font-family: 'Montserrat', sans-serif;
     font-size: 24px;
     font-weight: 600;
     color: #333;
@@ -159,7 +159,7 @@ footer {
 .social-icon {
     width: 24px;
     height: 24px;
-    margin: 0 15px; /* Increased spacing between icons */
+    margin: 0 30px; /* Doubled spacing between icons */
     vertical-align: middle;
     filter: grayscale(100%) brightness(100%); /* Monochrome white/gray to match Shardeum style */
 }
