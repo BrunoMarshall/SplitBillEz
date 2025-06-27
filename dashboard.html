@@ -25,12 +25,12 @@
             <div class="group">
                 <h3>Trip to Goa</h3>
                 <p>You owe Alice $50. You are owed $20 by Bob.</p>
-                <button>Settle Up</button>
+                <button onclick="simulateSettleUp('Trip to Goa', 50, 'Alice')">Settle Up</button>
             </div>
             <div class="group">
                 <h3>Dinner Party</h3>
                 <p>You owe Charlie $15. You are owed $10 by Dave.</p>
-                <button>Settle Up</button>
+                <button onclick="simulateSettleUp('Dinner Party', 15, 'Charlie')">Settle Up</button>
             </div>
         </section>
     </main>
@@ -60,6 +60,31 @@
     <script>
         function connectWallet() {
             alert("Simulated MetaMask connection!");
+        }
+
+        function simulateSettleUp(groupName, amountUSD, recipient) {
+            // Hypothetical SHM price: $0.10 per SHM
+            const shmPrice = 0.10;
+            const amountSHM = Math.round(amountUSD / shmPrice); // e.g., $50 ≈ 500 SHM
+            const transactionFeeSHM = 0.05; // $0.005 fee ≈ 0.05 SHM
+            const transactionHash = '0x' + Math.random().toString(16).substr(2, 64); // Random 32-byte hash
+            const explorerLink = `https://explorer.shardeum.org/tx/${transactionHash}`;
+
+            // Simulate transaction
+            alert(`Simulating settlement for ${groupName}...\n` +
+                  `Sending ${amountSHM} SHM to ${recipient} to settle $${amountUSD}.\n` +
+                  `Transaction Fee: ${transactionFeeSHM} SHM (~$0.005).\n` +
+                  `Transaction Hash: ${transactionHash}\n` +
+                  `View Receipt: ${explorerLink}\n\n` +
+                  `Thank you for using the SplitBillEz platform! You will receive 10 SPLIT tokens as gratitude.`);
+
+            // Optional: Update UI to reflect settled amount (e.g., remove "You owe" text)
+            const group = document.querySelector(`.group h3`).parentElement;
+            if (group.querySelector('p').textContent.includes(`You owe ${recipient}`)) {
+                group.querySelector('p').textContent = group.querySelector('p').textContent.replace(`You owe ${recipient} $${amountUSD}.`, `Settled with ${recipient}.`);
+                group.querySelector('button').disabled = true;
+                group.querySelector('button').textContent = 'Settled';
+            }
         }
     </script>
 </body>
