@@ -9,14 +9,16 @@
 </head>
 <body>
     <header>
-        <img src="images/splitbillez_logo.png" alt="SplitBillEz Logo" class="logo">
-        <h1>Add Expense</h1>
-        <nav>
-            <a href="index.html">Home</a>
-            <a href="dashboard.html">Dashboard</a>
-            <a href="add-expense.html">Add Expense</a>
-            <a href="#" onclick="connectWallet()">Connect Wallet</a>
-        </nav>
+        <div class="header-container">
+            <img src="images/splitbillez_logo.png" alt="SplitBillEz Logo" class="logo">
+            <h1>Add Expense</h1>
+            <nav>
+                <a href="index.html">Home</a>
+                <a href="dashboard.html">Dashboard</a>
+                <a href="add-expense.html">Add Expense</a>
+            </nav>
+            <button class="metamask-button" onclick="connectWallet()">Connect with MetaMask</button>
+        </div>
     </header>
     <main>
         <section>
@@ -28,7 +30,8 @@
                 <input type="number" id="amount" placeholder="e.g., 100">
                 <label for="group">Group:</label>
                 <select id="group">
-                    <option>Trip to Goa</option>
+                    <option>TT
+System: rip to Goa</option>
                     <option>Dinner Party</option>
                 </select>
                 <label for="split">Split Type:</label>
@@ -41,7 +44,27 @@
         </section>
     </main>
     <footer>
-        <p>&copy; 2025 SplitBillEz. Powered by Shardeum.</p>
+        <p>© 2025 SplitBillEz. Powered by Shardeum.</p>
+        <div class="social-links">
+            <a href="https://discord.com/invite/shardeum" target="_blank" rel="nofollow">
+                <img src="images/discord.svg" alt="Discord" class="social-icon">
+            </a>
+            <a href="https://github.com/shardeum" target="_blank" rel="nofollow">
+                <img src="images/github.svg" alt="GitHub" class="social-icon">
+            </a>
+            <a href="https://www.linkedin.com/company/shardeum/" target="_blank" rel="nofollow">
+                <img src="images/linkedin.svg" alt="LinkedIn" class="social-icon">
+            </a>
+            <a href="https://t.me/shardeum" target="_blank" rel="nofollow">
+                <img src="images/telegram.svg" alt="Telegram" class="social-icon">
+            </a>
+            <a href="https://x.com/shardeum" target="_blank" rel="nofollow">
+                <img src="images/twitter.svg" alt="X" class="social-icon">
+            </a>
+            <a href="https://www.youtube.com/@shardeum" target="_blank" rel="nofollow">
+                <img src="images/youtube.svg" alt="YouTube" class="social-icon">
+            </a>
+        </div>
     </footer>
     <script>
         function connectWallet() {
