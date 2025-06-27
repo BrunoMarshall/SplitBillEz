@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Expense - SplitBillEz</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" href="images/splitbillez_favicon.png">
+</head>
+<body>
+    <header>
+        <img src="images/splitbillez_logo.png" alt="SplitBillEz Logo" class="logo">
+        <h1>Add Expense</h1>
+        <nav>
+            <a href="index.html">Home</a>
+            <a href="dashboard.html">Dashboard</a>
+            <a href="add-expense.html">Add Expense</a>
+            <a href="#" onclick="connectWallet()">Connect Wallet</a>
+        </nav>
+    </header>
+    <main>
+        <section>
+            <h2>Add a New Expense</h2>
+            <form>
+                <label for="description">Description:</label>
+                <input type="text" id="description" placeholder="e.g., Dinner at Restaurant">
+                <label for="amount">Amount (SHM):</label>
+                <input type="number" id="amount" placeholder="e.g., 100">
+                <label for="group">Group:</label>
+                <select id="group">
+                    <option>Trip to Goa</option>
+                    <option>Dinner Party</option>
+                </select>
+                <label for="split">Split Type:</label>
+                <select id="split">
+                    <option>Equal</option>
+                    <option>Custom</option>
+                </select>
+                <button type="submit">Add Expense</button>
+            </form>
+        </section>
+    </main>
+    <footer>
+        <p>&copy; 2025 SplitBillEz. Powered by Shardeum.</p>
+    </footer>
+    <script>
+        function connectWallet() {
+            alert("Simulated MetaMask connection!");
+        }
+    </script>
+</body>
+</html>
