@@ -33,7 +33,7 @@ header h1 {
 }
 
 .logo {
-    width: 100px;
+    width: 200px; /* Doubled from 100px */
 }
 
 nav {
@@ -92,7 +92,7 @@ button {
     font-family: 'Lato', sans-serif;
     font-size: 16px;
     font-weight: 400;
-    background-color: #28a745;
+    background-color: #3042FC; /* Changed from #28a745 (green) to #3042FC (blue) */
     color: white;
     padding: 10px 20px;
     border: none;
@@ -101,7 +101,7 @@ button {
 }
 
 button:hover {
-    background-color: #218838;
+    background-color: #2635D9; /* Darker shade of #3042FC for hover */
 }
 
 .group {
@@ -159,7 +159,7 @@ footer {
 .social-icon {
     width: 24px;
     height: 24px;
-    margin: 0 30px; /* Doubled spacing between icons */
+    margin: 0 30px; /* Maintained doubled spacing */
     vertical-align: middle;
     filter: grayscale(100%) brightness(100%); /* Monochrome white/gray to match Shardeum style */
 }
