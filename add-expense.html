@@ -28,8 +28,14 @@
                 <form id="groupForm">
                     <label for="groupName">Group Name:</label>
                     <input type="text" id="groupName" placeholder="e.g., Trip to Goa" required>
-                    <label for="members">Member Addresses (comma-separated):</label>
-                    <input type="text" id="members" placeholder="e.g., 0xEa60...,0x742d..." required>
+                    <label>Member Addresses:</label>
+                    <div id="memberInputs">
+                        <div class="member-input">
+                            <input type="text" class="member-address" placeholder="e.g., 0xEa60..." required>
+                            <button type="button" class="remove-member" onclick="removeMember(this)">Remove</button>
+                        </div>
+                    </div>
+                    <button type="button" onclick="addMemberField()">Add Member</button>
                     <button type="submit">Create Group</button>
                 </form>
                 <p id="groupMessage"></p>
@@ -94,8 +100,7 @@
             try {
                 const userAddress = window.getAccount();
                 const groupIds = [];
-                // Iterate to fetch userGroups entries
-                for (let i = 0; i < 50; i++) { // Reduced limit for efficiency
+                for (let i = 0; i < 50; i++) {
                     try {
                         const groupId = await window.getContract().methods.userGroups(userAddress, i).call();
                         if (parseInt(groupId) >= 0 && groupId !== "") {
@@ -104,7 +109,7 @@
                             break;
                         }
                     } catch {
-                        break; // Stop on error (index out of bounds)
+                        break;
                     }
                 }
                 if (groupIds.length === 0) {
@@ -140,6 +145,41 @@
             document.getElementById('createGroupBtn').style.display = 'none';
         }
 
+        function addMemberField() {
+            const memberInputs = document.getElementById('memberInputs');
+            const memberCount = memberInputs.children.length;
+            if (memberCount >= 10) {
+                alert('Maximum 10 members allowed per group.');
+                return;
+            }
+            const div = document.createElement('div');
+            div.className = 'member-input';
+            div.innerHTML = `
+                <input type="text" class="member-address" placeholder="e.g., 0xEa60..." required>
+                <button type="button" class="remove-member" onclick="removeMember(this)">Remove</button>
+            `;
+            memberInputs.appendChild(div);
+            updateRemoveButtons();
+        }
+
+        function removeMember(button) {
+            const memberInputs = document.getElementById('memberInputs');
+            if (memberInputs.children.length > 1) {
+                button.parentElement.remove();
+                updateRemoveButtons();
+            } else {
+                alert('At least one member address is required.');
+            }
+        }
+
+        function updateRemoveButtons() {
+            const memberInputs = document.getElementById('memberInputs');
+            const removeButtons = memberInputs.getElementsByClassName('remove-member');
+            for (let btn of removeButtons) {
+                btn.style.display = memberInputs.children.length > 1 ? 'inline-block' : 'none';
+            }
+        }
+
         document.getElementById('groupForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             if (!window.web3() || !window.getContract() || !window.getAccount()) {
@@ -147,10 +187,12 @@
                 return;
             }
             const groupName = document.getElementById('groupName').value;
-            const membersInput = document.getElementById('members').value;
+            const memberInputs = document.getElementsByClassName('member-address');
             const groupMessage = document.getElementById('groupMessage');
             try {
-                const members = membersInput.split(',').map(addr => addr.trim()).filter(addr => addr.match(/^0x[a-fA-F0-9]{40}$/));
+                const members = Array.from(memberInputs)
+                    .map(input => input.value.trim())
+                    .filter(addr => addr.match(/^0x[a-fA-F0-9]{40}$/));
                 if (members.length < 2) {
                     groupMessage.textContent = 'Please enter at least two valid Ethereum addresses.';
                     return;
@@ -162,8 +204,14 @@
                 const tx = await window.getContract().methods.createGroup(groupName, members).send({ from: window.getAccount(), value: '0' });
                 groupMessage.textContent = `Group created! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`;
                 this.reset();
+                document.getElementById('memberInputs').innerHTML = `
+                    <div class="member-input">
+                        <input type="text" class="member-address" placeholder="e.g., 0xEa60..." required>
+                        <button type="button" class="remove-member" onclick="removeMember(this)" style="display:none;">Remove</button>
+                    </div>
+                `;
                 document.getElementById('groupCreation').style.display = 'none';
-                await populateGroupDropdown(); // Refresh dropdown
+                await populateGroupDropdown();
             } catch (error) {
                 groupMessage.textContent = 'Error: ' + error.message;
             }

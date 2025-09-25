@@ -87,12 +87,16 @@ main {
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
 
-h2 {
+h2, h3 {
     font-family: 'Montserrat', sans-serif;
     font-size: 24px;
     font-weight: 600;
     color: #333;
     letter-spacing: 0.02em;
+}
+
+h3 {
+    font-size: 20px;
 }
 
 button {
@@ -105,6 +109,7 @@ button {
     border: none;
     border-radius: 5px;
     cursor: pointer;
+    margin: 5px 0;
 }
 
 button:hover {
@@ -152,6 +157,25 @@ form input, form select {
     border-radius: 5px;
 }
 
+.member-input {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.member-address {
+    flex-grow: 1;
+}
+
+.remove-member {
+    background-color: #ff4d4d;
+}
+
+.remove-member:hover {
+    background-color: #cc0000;
+}
+
 footer {
     font-family: 'Lato', sans-serif;
     font-size: 14px;
@@ -192,5 +216,13 @@ footer {
     }
     .social-icon {
         margin: 5px 15px;
+    }
+    .member-input {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .remove-member {
+        width: 100%;
+        text-align: center;
     }
 }
