@@ -8,7 +8,7 @@
     <link rel="icon" href="images/splitbillez_favicon.png">
     <script src="https://cdn.jsdelivr.net/npm/web3@latest/dist/web3.min.js"></script>
 </head>
-<body onload="initWeb3()">
+<body onload="initWeb3().then(populateGroupDropdown)">
     <header>
         <div class="header-container">
             <img src="images/splitbillez_logo.png" alt="SplitBillEz Logo" class="logo">
@@ -17,15 +17,17 @@
                 <a href="dashboard.html">Dashboard</a>
                 <a href="add-expense.html">Add Expense</a>
             </nav>
-            <button class="metamask-button" onclick="initWeb3()">Connect with MetaMask</button>
+            <button class="metamask-button" onclick="initWeb3().then(populateGroupDropdown)">Connect with MetaMask</button>
         </div>
     </header>
     <main>
         <section>
             <h2>Add a New Expense</h2>
             <form id="expenseForm">
-                <label for="groupId">Group ID:</label>
-                <input type="number" id="groupId" placeholder="e.g., 0" required>
+                <label for="groupId">Group:</label>
+                <select id="groupId" required>
+                    <option value="" disabled selected>Select a group</option>
+                </select>
                 <label for="description">Description:</label>
                 <input type="text" id="description" placeholder="e.g., Dinner at Restaurant" required>
                 <label for="amount">Amount (SHM):</label>
@@ -66,6 +68,33 @@
     </footer>
     <script src="js/app.js"></script>
     <script>
+        async function populateGroupDropdown() {
+            if (!window.getContract() || !window.getAccount()) {
+                document.getElementById('groupId').innerHTML = '<option value="" disabled selected>Connect wallet first</option>';
+                return;
+            }
+            try {
+                const groupSelect = document.getElementById('groupId');
+                groupSelect.innerHTML = '<option value="" disabled selected>Loading groups...</option>';
+                const userGroups = await window.getContract().methods.userGroups(window.getAccount()).call();
+                if (userGroups.length === 0) {
+                    groupSelect.innerHTML = '<option value="" disabled selected>No groups found</option>';
+                    return;
+                }
+                groupSelect.innerHTML = '<option value="" disabled selected>Select a group</option>';
+                for (let groupId of userGroups) {
+                    const [name] = await window.getContract().methods.getGroup(groupId).call();
+                    const option = document.createElement('option');
+                    option.value = groupId;
+                    option.textContent = `${name} (ID: ${groupId})`;
+                    groupSelect.appendChild(option);
+                }
+            } catch (error) {
+                console.error('Error fetching groups:', error);
+                document.getElementById('groupId').innerHTML = '<option value="" disabled selected>Error loading groups</option>';
+            }
+        }
+
         const splitSelect = document.getElementById('split');
         const customInput = document.getElementById('customShares');
         const customLabel = document.getElementById('customLabel');
@@ -77,15 +106,15 @@
 
         document.getElementById('expenseForm').addEventListener('submit', async function(e) {
             e.preventDefault();
-            if (!window.web3) {
-                alert('Web3 not initialized. Please ensure MetaMask is installed and connected.');
+            if (!window.web3 || !window.getContract() || !window.getAccount()) {
+                alert('Web3 not initialized or wallet not connected. Please ensure MetaMask is installed and connected.');
                 return;
             }
-            if (!window.getContract() || !window.getAccount()) {
-                alert('Connect wallet first!');
+            const groupId = document.getElementById('groupId').value;
+            if (!groupId) {
+                alert('Please select a group.');
                 return;
             }
-            const groupId = parseInt(document.getElementById('groupId').value);
             const description = document.getElementById('description').value;
             const amountInput = document.getElementById('amount').value;
             let amount;
@@ -105,19 +134,26 @@
                         alert('Custom shares must sum to 100%');
                         return;
                     }
+                    // Verify custom shares length matches group members
+                    const [_, members] = await window.getContract().methods.getGroup(groupId).call();
+                    if (customShares.length !== members.length) {
+                        alert(`Custom shares count (${customShares.length}) must match group members (${members.length}).`);
+                        return;
+                    }
                 } catch (error) {
                     alert('Invalid custom shares format. Use comma-separated percentages (e.g., 40,30,30).');
                     return;
                 }
             }
             try {
-                await window.getContract().methods.addExpense(groupId, description, amount, splitType, customShares).send({ from: window.getAccount(), value: '0' });
-                alert('Expense added! Check transaction: https://explorer-unstable.shardeum.org');
+                const tx = await window.getContract().methods.addExpense(groupId, description, amount, splitType, customShares).send({ from: window.getAccount(), value: '0' });
+                alert(`Expense added! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`);
                 this.reset();
                 customInput.style.display = 'none';
                 customLabel.style.display = 'none';
+                populateGroupDropdown(); // Refresh groups
             } catch (error) {
-                alert('Error: ' + error.message + '\nEnsure Group ID exists, you are a member, and have enough SHM for gas.');
+                alert('Error: ' + error.message + '\nEnsure you are a group member and have enough SHM for gas.');
             }
         });
     </script>

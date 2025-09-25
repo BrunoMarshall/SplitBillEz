@@ -365,15 +365,18 @@ let userAccount;
 let contract;
 
 async function initWeb3() {
-    if (window.ethereum) {
+    if (!window.ethereum) {
+        alert('MetaMask is not installed. Please install MetaMask and refresh the page.');
+        console.error('MetaMask not detected');
+        return false;
+    }
+    try {
         web3 = new Web3(window.ethereum);
-        try {
-            // Switch to Shardeum Unstable Testnet (8080)
-            await window.ethereum.request({
-                method: 'wallet_switchEthereumChain',
-                params: [{ chainId: '0x1f90' }] // Hex for 8080
-            });
-        } catch (switchError) {
+        console.log('Web3 initialized:', web3);
+        await window.ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0x1f90' }] // Shardeum Unstable Testnet (8080)
+        }).catch(async (switchError) => {
             if (switchError.code === 4902) {
                 await window.ethereum.request({
                     method: 'wallet_addEthereumChain',
@@ -388,15 +391,17 @@ async function initWeb3() {
             } else {
                 throw switchError;
             }
-        }
-        await window.ethereum.request({ method: 'eth_requestAccounts' });
-        const accounts = await web3.eth.getAccounts();
+        });
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
         userAccount = accounts[0];
         contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
         console.log('Connected:', userAccount);
-        updateUI();
-    } else {
-        alert('Please install MetaMask!');
+        await updateUI();
+        return true;
+    } catch (error) {
+        console.error('Error initializing Web3:', error);
+        alert('Failed to connect to MetaMask: ' + error.message);
+        return false;
     }
 }
 
@@ -419,4 +424,4 @@ async function updateUI() {
 window.initWeb3 = initWeb3;
 window.getContract = () => contract;
 window.getAccount = () => userAccount;
-window.web3 = web3; // For native transfers
+window.web3 = () => web3; // Changed to function to avoid undefined issues
