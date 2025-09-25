@@ -31,8 +31,9 @@
                     <label>Member Addresses:</label>
                     <div id="memberInputs">
                         <div class="member-input">
-                            <input type="text" class="member-address" placeholder="e.g., 0xEa60..." required>
-                            <button type="button" class="remove-member" onclick="removeMember(this)">Remove</button>
+                            <input type="text" class="member-name" placeholder="Your Name (e.g., Alice)" required>
+                            <input type="text" class="member-address" id="userAddress" readonly>
+                            <span class="member-label">Your Address</span>
                         </div>
                     </div>
                     <button type="button" onclick="addMemberField()">Add Member</button>
@@ -99,6 +100,11 @@
             }
             try {
                 const userAddress = window.getAccount();
+                // Set user's address in readonly field
+                const userAddressInput = document.getElementById('userAddress');
+                if (userAddressInput) {
+                    userAddressInput.value = userAddress;
+                }
                 const groupIds = [];
                 for (let i = 0; i < 50; i++) {
                     try {
@@ -155,7 +161,8 @@
             const div = document.createElement('div');
             div.className = 'member-input';
             div.innerHTML = `
-                <input type="text" class="member-address" placeholder="e.g., 0xEa60..." required>
+                <input type="text" class="member-name" placeholder="Member Name (e.g., Bob)" required>
+                <input type="text" class="member-address" placeholder="e.g., 0x742d..." required>
                 <button type="button" class="remove-member" onclick="removeMember(this)">Remove</button>
             `;
             memberInputs.appendChild(div);
@@ -168,7 +175,7 @@
                 button.parentElement.remove();
                 updateRemoveButtons();
             } else {
-                alert('At least one member address is required.');
+                alert('At least one additional member is required besides your address.');
             }
         }
 
@@ -191,14 +198,16 @@
             const groupMessage = document.getElementById('groupMessage');
             try {
                 const members = Array.from(memberInputs)
-                    .map(input => input.value.trim())
-                    .filter(addr => addr.match(/^0x[a-fA-F0-9]{40}$/));
+                    .map(input => input.value.trim().toLowerCase())
+                    .filter(addr => addr.match(/^0x[a-f0-9]{40}$/));
+                console.log('Submitting members:', members); // Debug log
                 if (members.length < 2) {
-                    groupMessage.textContent = 'Please enter at least two valid Ethereum addresses.';
+                    groupMessage.textContent = 'Please include at least two valid Ethereum addresses (including yours).';
                     return;
                 }
-                if (!members.includes(window.getAccount())) {
-                    groupMessage.textContent = 'You must include your own address in the group.';
+                const userAddress = window.getAccount().toLowerCase();
+                if (!members.includes(userAddress)) {
+                    groupMessage.textContent = 'Your address is missing from the member list.';
                     return;
                 }
                 const tx = await window.getContract().methods.createGroup(groupName, members).send({ from: window.getAccount(), value: '0' });
@@ -206,14 +215,16 @@
                 this.reset();
                 document.getElementById('memberInputs').innerHTML = `
                     <div class="member-input">
-                        <input type="text" class="member-address" placeholder="e.g., 0xEa60..." required>
-                        <button type="button" class="remove-member" onclick="removeMember(this)" style="display:none;">Remove</button>
+                        <input type="text" class="member-name" placeholder="Your Name (e.g., Alice)" required>
+                        <input type="text" class="member-address" id="userAddress" readonly>
+                        <span class="member-label">Your Address</span>
                     </div>
                 `;
                 document.getElementById('groupCreation').style.display = 'none';
                 await populateGroupDropdown();
             } catch (error) {
-                groupMessage.textContent = 'Error: ' + error.message;
+                console.error('Group creation error:', error);
+                groupMessage.textContent = 'Error: ' + (error.message.includes('revert') ? 'Invalid input or contract revert. Check addresses and try again.' : error.message);
             }
         });
 

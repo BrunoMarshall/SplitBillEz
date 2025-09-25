@@ -164,8 +164,18 @@ form input, form select {
     margin-bottom: 10px;
 }
 
-.member-address {
-    flex-grow: 1;
+.member-name, .member-address {
+    flex: 1;
+}
+
+.member-address[readonly] {
+    background-color: #f0f0f0;
+    cursor: not-allowed;
+}
+
+.member-label {
+    font-size: 14px;
+    color: #555;
 }
 
 .remove-member {
@@ -220,6 +230,9 @@ footer {
     .member-input {
         flex-direction: column;
         align-items: flex-start;
+    }
+    .member-name, .member-address {
+        width: 100%;
     }
     .remove-member {
         width: 100%;
