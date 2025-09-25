@@ -72,6 +72,12 @@ nav a:hover {
     background-color: #f5f5f5;
 }
 
+.metamask-button:disabled {
+    background-color: #28a745;
+    color: white;
+    cursor: not-allowed;
+}
+
 main {
     max-width: 800px;
     margin: 20px auto;
@@ -103,6 +109,11 @@ button {
 
 button:hover {
     background-color: #2635D9;
+}
+
+button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
 }
 
 .group {
@@ -174,12 +185,12 @@ footer {
 /* Responsive adjustments */
 @media (max-width: 600px) {
     .logo {
-        width: 200px; 
+        width: 200px;
     }
     .social-links {
         flex-wrap: wrap;
     }
     .social-icon {
-        margin: 5px 15px; 
+        margin: 5px 15px;
     }
 }

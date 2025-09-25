@@ -6,8 +6,9 @@
     <title>Dashboard - SplitBillEz</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="icon" href="images/splitbillez_favicon.png">
+    <script src="https://cdn.jsdelivr.net/npm/web3@latest/dist/web3.min.js"></script>
 </head>
-<body>
+<body onload="initWeb3()">
     <header>
         <div class="header-container">
             <img src="images/splitbillez_logo.png" alt="SplitBillEz Logo" class="logo">
@@ -16,21 +17,21 @@
                 <a href="dashboard.html">Dashboard</a>
                 <a href="add-expense.html">Add Expense</a>
             </nav>
-            <button class="metamask-button" onclick="connectWallet()">Connect with MetaMask</button>
+            <button class="metamask-button" onclick="initWeb3()">Connect with MetaMask</button>
         </div>
     </header>
     <main>
         <section>
             <h2>Your Groups</h2>
             <div class="group">
-                <h3>Trip to Goa</h3>
-                <p>You owe Alice $50. You are owed $20 by Bob.</p>
-                <button onclick="simulateSettleUp('Trip to Goa', 50, 'Alice')">Settle Up</button>
+                <h3>Trip to Goa (ID: 0)</h3>
+                <p>You owe Alice 500 SHM.</p>
+                <button onclick="settleUp(0, '0x742d35Cc6634C0532925a3b8D7aBFAb7cD5bE4c4', 500000000000000000000n)">Settle Up</button>
             </div>
             <div class="group">
-                <h3>Dinner Party</h3>
-                <p>You owe Charlie $15. You are owed $10 by Dave.</p>
-                <button onclick="simulateSettleUp('Dinner Party', 15, 'Charlie')">Settle Up</button>
+                <h3>Dinner Party (ID: 1)</h3>
+                <p>You owe Charlie 150 SHM.</p>
+                <button onclick="settleUp(1, '0x1234567890123456789012345678901234567890', 150000000000000000000n)">Settle Up</button>
             </div>
         </section>
     </main>
@@ -57,33 +58,32 @@
             </a>
         </div>
     </footer>
+    <script src="js/app.js"></script>
     <script>
-        function connectWallet() {
-            alert("Simulated MetaMask connection!");
-        }
-
-        function simulateSettleUp(groupName, amountUSD, recipient) {
-            // Hypothetical SHM price: $0.10 per SHM
-            const shmPrice = 0.10;
-            const amountSHM = Math.round(amountUSD / shmPrice); // e.g., $50 ≈ 500 SHM
-            const transactionFeeSHM = 0.05; // $0.005 fee ≈ 0.05 SHM
-            const transactionHash = '0x' + Math.random().toString(16).substr(2, 64); // Random 32-byte hash
-            const explorerLink = `https://explorer.shardeum.org/tx/${transactionHash}`;
-
-            // Simulate transaction
-            alert(`Simulating settlement for ${groupName}...\n` +
-                  `Sending ${amountSHM} SHM to ${recipient} to settle $${amountUSD}.\n` +
-                  `Transaction Fee: ${transactionFeeSHM} SHM (~$0.005).\n` +
-                  `Transaction Hash: ${transactionHash}\n` +
-                  `View Receipt: ${explorerLink}\n\n` +
-                  `Thank you for using the SplitBillEz platform! You will receive 10 SPLIT tokens as gratitude.`);
-
-            // Optional: Update UI to reflect settled amount (e.g., remove "You owe" text)
-            const group = document.querySelector(`.group h3`).parentElement;
-            if (group.querySelector('p').textContent.includes(`You owe ${recipient}`)) {
-                group.querySelector('p').textContent = group.querySelector('p').textContent.replace(`You owe ${recipient} $${amountUSD}.`, `Settled with ${recipient}.`);
-                group.querySelector('button').disabled = true;
-                group.querySelector('button').textContent = 'Settled';
+        async function settleUp(groupId, toAddress, amountWei) {
+            if (!window.getContract() || !window.getAccount()) {
+                alert('Connect wallet first!');
+                return;
+            }
+            try {
+                // Step 1: Native SHM transfer
+                const txHash1 = await window.web3.eth.sendTransaction({
+                    from: window.getAccount(),
+                    to: toAddress,
+                    value: amountWei
+                });
+                
+                // Step 2: Record settlement on-chain
+                const txHash2 = await window.getContract().methods.settleDebt(groupId, toAddress, amountWei).send({ from: window.getAccount() });
+                
+                alert(`Settled ${web3.utils.fromWei(amountWei, 'ether')} SHM!\nTransfer Tx: https://explorer-unstable.shardeum.org/tx/${txHash1.transactionHash}\nRecord Tx: https://explorer-unstable.shardeum.org/tx/${txHash2.transactionHash}`);
+                
+                // Update UI
+                event.target.disabled = true;
+                event.target.textContent = 'Settled';
+                event.target.previousElementSibling.textContent = `Settled with ${event.target.previousElementSibling.textContent.split(' ')[2]}`;
+            } catch (error) {
+                alert('Error: ' + error.message + '\nEnsure you have enough SHM for gas/transfer!');
             }
         }
     </script>
