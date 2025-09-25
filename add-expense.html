@@ -23,11 +23,23 @@
     <main>
         <section>
             <h2>Add a New Expense</h2>
+            <div id="groupCreation" style="display:none;">
+                <h3>Create a New Group</h3>
+                <form id="groupForm">
+                    <label for="groupName">Group Name:</label>
+                    <input type="text" id="groupName" placeholder="e.g., Trip to Goa" required>
+                    <label for="members">Member Addresses (comma-separated):</label>
+                    <input type="text" id="members" placeholder="e.g., 0xEa60...,0x742d..." required>
+                    <button type="submit">Create Group</button>
+                </form>
+                <p id="groupMessage"></p>
+            </div>
             <form id="expenseForm">
                 <label for="groupId">Group:</label>
                 <select id="groupId" required>
                     <option value="" disabled selected>Select a group</option>
                 </select>
+                <button type="button" id="createGroupBtn" onclick="showGroupCreation()">Create New Group</button>
                 <label for="description">Description:</label>
                 <input type="text" id="description" placeholder="e.g., Dinner at Restaurant" required>
                 <label for="amount">Amount (SHM):</label>
@@ -70,32 +82,40 @@
     <script>
         async function populateGroupDropdown() {
             const groupSelect = document.getElementById('groupId');
+            const groupCreationDiv = document.getElementById('groupCreation');
+            const createGroupBtn = document.getElementById('createGroupBtn');
             groupSelect.innerHTML = '<option value="" disabled selected>Loading groups...</option>';
             if (!window.getContract() || !window.getAccount()) {
                 groupSelect.innerHTML = '<option value="" disabled selected>Connect wallet first</option>';
+                groupCreationDiv.style.display = 'none';
+                createGroupBtn.style.display = 'block';
                 return;
             }
             try {
                 const userAddress = window.getAccount();
                 const groupIds = [];
                 // Iterate to fetch userGroups entries
-                for (let i = 0; i < 100; i++) { // Limit to 100 to avoid infinite loop
+                for (let i = 0; i < 50; i++) { // Reduced limit for efficiency
                     try {
                         const groupId = await window.getContract().methods.userGroups(userAddress, i).call();
-                        if (groupId !== "0" && groupId !== "") { // Check for valid group ID
+                        if (parseInt(groupId) >= 0 && groupId !== "") {
                             groupIds.push(groupId);
                         } else {
-                            break; // Stop when no more valid IDs are found
+                            break;
                         }
                     } catch {
-                        break; // Stop on error (e.g., index out of bounds)
+                        break; // Stop on error (index out of bounds)
                     }
                 }
                 if (groupIds.length === 0) {
                     groupSelect.innerHTML = '<option value="" disabled selected>No groups found</option>';
+                    groupCreationDiv.style.display = 'block';
+                    createGroupBtn.style.display = 'block';
                     return;
                 }
                 groupSelect.innerHTML = '<option value="" disabled selected>Select a group</option>';
+                groupCreationDiv.style.display = 'none';
+                createGroupBtn.style.display = 'block';
                 for (let groupId of groupIds) {
                     try {
                         const [name] = await window.getContract().methods.getGroup(groupId).call();
@@ -110,8 +130,44 @@
             } catch (error) {
                 console.error('Error fetching groups:', error);
                 groupSelect.innerHTML = '<option value="" disabled selected>Error loading groups</option>';
+                groupCreationDiv.style.display = 'block';
+                createGroupBtn.style.display = 'block';
             }
         }
+
+        function showGroupCreation() {
+            document.getElementById('groupCreation').style.display = 'block';
+            document.getElementById('createGroupBtn').style.display = 'none';
+        }
+
+        document.getElementById('groupForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            if (!window.web3() || !window.getContract() || !window.getAccount()) {
+                alert('Please connect MetaMask first.');
+                return;
+            }
+            const groupName = document.getElementById('groupName').value;
+            const membersInput = document.getElementById('members').value;
+            const groupMessage = document.getElementById('groupMessage');
+            try {
+                const members = membersInput.split(',').map(addr => addr.trim()).filter(addr => addr.match(/^0x[a-fA-F0-9]{40}$/));
+                if (members.length < 2) {
+                    groupMessage.textContent = 'Please enter at least two valid Ethereum addresses.';
+                    return;
+                }
+                if (!members.includes(window.getAccount())) {
+                    groupMessage.textContent = 'You must include your own address in the group.';
+                    return;
+                }
+                const tx = await window.getContract().methods.createGroup(groupName, members).send({ from: window.getAccount(), value: '0' });
+                groupMessage.textContent = `Group created! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`;
+                this.reset();
+                document.getElementById('groupCreation').style.display = 'none';
+                await populateGroupDropdown(); // Refresh dropdown
+            } catch (error) {
+                groupMessage.textContent = 'Error: ' + error.message;
+            }
+        });
 
         const splitSelect = document.getElementById('split');
         const customInput = document.getElementById('customShares');
@@ -152,7 +208,6 @@
                         alert('Custom shares must sum to 100%');
                         return;
                     }
-                    // Verify custom shares length matches group members
                     const [_, members] = await window.getContract().methods.getGroup(groupId).call();
                     if (customShares.length !== members.length) {
                         alert(`Custom shares count (${customShares.length}) must match group members (${members.length}).`);
@@ -169,7 +224,7 @@
                 this.reset();
                 customInput.style.display = 'none';
                 customLabel.style.display = 'none';
-                await populateGroupDropdown(); // Refresh groups
+                await populateGroupDropdown();
             } catch (error) {
                 alert('Error: ' + error.message + '\nEnsure you are a group member and have enough SHM for gas.');
             }

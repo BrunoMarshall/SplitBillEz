@@ -372,7 +372,7 @@ async function initWeb3() {
     }
     try {
         web3 = new Web3(window.ethereum);
-        console.log('Web3 initialized:', web3);
+        console.log('Web3 initialized:', !!web3, 'Version:', Web3.version);
         await window.ethereum.request({
             method: 'wallet_switchEthereumChain',
             params: [{ chainId: '0x1f90' }] // Shardeum Unstable Testnet (8080)
@@ -393,9 +393,13 @@ async function initWeb3() {
             }
         });
         const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+        if (!accounts || accounts.length === 0) {
+            throw new Error('No accounts returned by MetaMask');
+        }
         userAccount = accounts[0];
         contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
-        console.log('Connected:', userAccount);
+        console.log('Connected account:', userAccount);
+        console.log('Contract initialized:', !!contract);
         await updateUI();
         return true;
     } catch (error) {
@@ -424,4 +428,4 @@ async function updateUI() {
 window.initWeb3 = initWeb3;
 window.getContract = () => contract;
 window.getAccount = () => userAccount;
-window.web3 = () => web3; // Changed to function to avoid undefined issues
+window.web3 = () => web3;
