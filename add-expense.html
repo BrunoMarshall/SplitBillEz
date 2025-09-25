@@ -77,31 +77,47 @@
 
         document.getElementById('expenseForm').addEventListener('submit', async function(e) {
             e.preventDefault();
+            if (!window.web3) {
+                alert('Web3 not initialized. Please ensure MetaMask is installed and connected.');
+                return;
+            }
             if (!window.getContract() || !window.getAccount()) {
                 alert('Connect wallet first!');
                 return;
             }
             const groupId = parseInt(document.getElementById('groupId').value);
             const description = document.getElementById('description').value;
-            const amount = window.web3.utils.toWei(document.getElementById('amount').value, 'ether');
+            const amountInput = document.getElementById('amount').value;
+            let amount;
+            try {
+                amount = window.web3.utils.toWei(amountInput, 'ether');
+            } catch (error) {
+                alert('Invalid amount format. Please enter a valid number.');
+                return;
+            }
             const splitType = document.getElementById('split').value;
             let customShares = [];
             if (splitType === 'custom') {
-                customShares = document.getElementById('customShares').value.split(',').map(s => parseInt(s.trim()));
-                const total = customShares.reduce((sum, val) => sum + val, 0);
-                if (total !== 100) {
-                    alert('Custom shares must sum to 100%');
+                try {
+                    customShares = document.getElementById('customShares').value.split(',').map(s => parseInt(s.trim()));
+                    const total = customShares.reduce((sum, val) => sum + val, 0);
+                    if (total !== 100) {
+                        alert('Custom shares must sum to 100%');
+                        return;
+                    }
+                } catch (error) {
+                    alert('Invalid custom shares format. Use comma-separated percentages (e.g., 40,30,30).');
                     return;
                 }
             }
             try {
                 await window.getContract().methods.addExpense(groupId, description, amount, splitType, customShares).send({ from: window.getAccount(), value: '0' });
-                alert('Expense added! Tx on explorer: https://explorer-unstable.shardeum.org');
+                alert('Expense added! Check transaction: https://explorer-unstable.shardeum.org');
                 this.reset();
                 customInput.style.display = 'none';
                 customLabel.style.display = 'none';
             } catch (error) {
-                alert('Error: ' + error.message);
+                alert('Error: ' + error.message + '\nEnsure Group ID exists, you are a member, and have enough SHM for gas.');
             }
         });
     </script>
