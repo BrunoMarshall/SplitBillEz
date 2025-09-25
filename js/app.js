@@ -368,17 +368,17 @@ async function initWeb3() {
     if (window.ethereum) {
         web3 = new Web3(window.ethereum);
         try {
-            // Switch to Shardeum Unstable (8080)
+            // Switch to Shardeum Unstable Testnet (8080)
             await window.ethereum.request({
                 method: 'wallet_switchEthereumChain',
-                params: [{ chainId: '0x1f98' }] // Hex for 8080
+                params: [{ chainId: '0x1f90' }] // Hex for 8080
             });
         } catch (switchError) {
             if (switchError.code === 4902) {
                 await window.ethereum.request({
                     method: 'wallet_addEthereumChain',
                     params: [{
-                        chainId: '0x1f98',
+                        chainId: '0x1f90',
                         chainName: 'Shardeum Unstable Testnet',
                         rpcUrls: ['https://api-unstable.shardeum.org'],
                         nativeCurrency: { name: 'SHM', symbol: 'SHM', decimals: 18 },
