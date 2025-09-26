@@ -68,10 +68,9 @@
     </footer>
     <script src="js/app.js"></script>
     <script>
-        // Member name mapping (temporary, could be stored in localStorage or contract)
         const memberNames = {
             '0xea60f886fa7c1cadfa48b93262b272fc2433d3d5': 'Me',
-            '0x2defbd7d484ad2bea98028f7ffd2940bc7c3b0cd': 'John' // Add more as needed
+            '0x2defbd7d484ad2bea98028f7ffd2940bc7c3b0cd': 'John'
         };
 
         async function populateDashboard() {
@@ -91,28 +90,28 @@
             }
             try {
                 const userAddress = window.getAccount();
-                console.log('Fetching groups for dashboard:', userAddress); // Debug log
+                console.log('Fetching groups for dashboard:', userAddress);
                 const groupIds = [];
                 for (let i = 0; i < 50; i++) {
                     let attempts = 3;
                     while (attempts > 0) {
                         try {
                             const groupId = await window.getContract().methods.userGroups(userAddress, i).call();
-                            console.log(`userGroups[${i}]:`, groupId); // Debug log
+                            console.log(`userGroups[${i}]:`, groupId);
                             if (parseInt(groupId) >= 0 && groupId !== "" && groupId !== "0") {
                                 groupIds.push(groupId);
                             }
-                            break; // Success, exit retry loop
+                            break;
                         } catch (error) {
                             console.error(`Error fetching userGroups[${i}], attempt ${4 - attempts}:`, error);
                             attempts--;
-                            if (attempts === 0) break; // Exit on final failure
-                            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
+                            if (attempts === 0) break;
+                            await new Promise(resolve => setTimeout(resolve, 1000));
                         }
                     }
-                    if (attempts === 0) break; // Stop if last attempt failed
+                    if (attempts === 0) break;
                 }
-                console.log('Dashboard group IDs:', groupIds); // Debug log
+                console.log('Dashboard group IDs:', groupIds);
                 if (groupIds.length === 0) {
                     dashboardContent.innerHTML = '<p>No groups found. Create one in the Add Expense page.</p>';
                     settleGroupSelect.innerHTML = '<option value="" disabled selected>No groups found</option>';
@@ -127,24 +126,22 @@
                 for (let groupId of groupIds) {
                     try {
                         const result = await window.getContract().methods.getGroup(groupId).call();
-                        console.log(`Group ${groupId} result:`, result); // Debug log
+                        console.log(`Group ${groupId} result:`, result);
                         const name = result[0] || result.name || 'Unnamed Group';
                         const members = result[1] || result.members || [];
                         if (!members || !Array.isArray(members)) {
                             console.warn(`Group ${groupId} has invalid members array:`, members);
                             continue;
                         }
-                        // Fetch group balances
                         let balMembers = [], balances = [];
                         try {
                             const balanceData = await window.getContract().methods.getGroupBalances(groupId).call();
                             balMembers = balanceData[0] || balanceData.members || [];
                             balances = balanceData[1] || balanceData.balances || [];
-                            console.log(`Group ${groupId} balances:`, { balMembers, balances }); // Debug log
+                            console.log(`Group ${groupId} balances:`, { balMembers, balances });
                         } catch (error) {
                             console.error(`Error fetching balances for group ${groupId}:`, error);
                         }
-                        // Fetch expenses
                         const expenseCount = await window.getContract().methods.expenseCount().call();
                         const expenses = [];
                         for (let i = 0; i < expenseCount; i++) {
@@ -163,7 +160,6 @@
                                 console.error(`Error fetching expense ${i}:`, error);
                             }
                         }
-                        // Create group section
                         const groupDiv = document.createElement('div');
                         groupDiv.className = 'group';
                         groupDiv.innerHTML = `
@@ -179,7 +175,6 @@
                             `).join('') : '<p>No balances available.</p>'}
                         `;
                         dashboardContent.appendChild(groupDiv);
-                        // Add group to settle debt dropdown
                         const option = document.createElement('option');
                         option.value = groupId;
                         option.textContent = `${name} (ID: ${groupId})`;
@@ -188,7 +183,6 @@
                         console.error(`Error processing group ${groupId}:`, error);
                     }
                 }
-                // Update settleTo dropdown when group is selected
                 settleGroupSelect.addEventListener('change', async function() {
                     settleToSelect.innerHTML = '<option value="" disabled selected>Select a member</option>';
                     if (this.value) {
@@ -239,7 +233,7 @@
                 const tx = await window.getContract().methods.settleDebt(groupId, toAddress, amount).send({
                     from: window.getAccount(),
                     value: '0',
-                    type: '0x0' // Use legacy transaction
+                    type: '0x0'
                 });
                 settleMessage.textContent = `Debt settled! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`;
                 this.reset();

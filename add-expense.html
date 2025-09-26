@@ -23,6 +23,26 @@
     <main>
         <section>
             <h2>Add a New Expense</h2>
+            <form id="expenseForm">
+                <label for="description">Description:</label>
+                <input type="text" id="description" placeholder="e.g., Dinner at Restaurant" required>
+                <label for="amount">Amount (SHM):</label>
+                <input type="number" id="amount" placeholder="e.g., 100" step="0.01" required>
+                <label for="split">Split Type:</label>
+                <select id="split" required>
+                    <option value="equal">Equal</option>
+                    <option value="custom">Custom (% shares, sum to 100)</option>
+                </select>
+                <label for="customShares" id="customLabel" style="display:none;">Custom Shares (%, comma-separated):</label>
+                <input type="text" id="customShares" placeholder="e.g., 40,30,30" style="display:none;">
+                <label for="groupId">Group:</label>
+                <select id="groupId" required>
+                    <option value="" disabled selected>Select a group</option>
+                </select>
+                <button type="button" id="createGroupBtn" onclick="showGroupCreation()">Create Group</button>
+                <button type="submit">Add Expense</button>
+            </form>
+            <p id="expenseMessage"></p>
             <div id="groupCreation" style="display:none;">
                 <h3>Create a New Group</h3>
                 <form id="groupForm">
@@ -46,26 +66,6 @@
                 </form>
                 <p id="groupMessage"></p>
             </div>
-            <form id="expenseForm">
-                <label for="description">Description:</label>
-                <input type="text" id="description" placeholder="e.g., Dinner at Restaurant" required>
-                <label for="amount">Amount (SHM):</label>
-                <input type="number" id="amount" placeholder="e.g., 100" step="0.01" required>
-                <label for="split">Split Type:</label>
-                <select id="split" required>
-                    <option value="equal">Equal</option>
-                    <option value="custom">Custom (% shares, sum to 100)</option>
-                </select>
-                <label for="customShares" id="customLabel" style="display:none;">Custom Shares (%, comma-separated):</label>
-                <input type="text" id="customShares" placeholder="e.g., 40,30,30" style="display:none;">
-                <label for="groupId">Group:</label>
-                <select id="groupId" required>
-                    <option value="" disabled selected>Select a group</option>
-                </select>
-                <button type="button" id="createGroupBtn" onclick="showGroupCreation()">Create Group</button>
-                <button type="submit">Add Expense</button>
-            </form>
-            <p id="expenseMessage"></p>
         </section>
     </main>
     <footer>
@@ -108,36 +108,32 @@
             }
             try {
                 const userAddress = window.getAccount();
-                console.log('Fetching groups for:', userAddress); // Debug log
-                // Set user's address in readonly field
+                console.log('Fetching groups for:', userAddress);
                 const userAddressInput = document.getElementById('userAddress');
                 if (userAddressInput) {
                     userAddressInput.value = userAddress;
                 }
                 const groupIds = [];
-                // Retry logic for RPC errors
                 for (let i = 0; i < 50; i++) {
                     let attempts = 3;
                     while (attempts > 0) {
                         try {
                             const groupId = await window.getContract().methods.userGroups(userAddress, i).call();
-                            console.log(`userGroups[${i}]:`, groupId); // Debug log
+                            console.log(`userGroups[${i}]:`, groupId);
                             if (parseInt(groupId) >= 0 && groupId !== "" && groupId !== "0") {
                                 groupIds.push(groupId);
-                            } else {
-                                break;
                             }
-                            break; // Success, exit retry loop
+                            break;
                         } catch (error) {
                             console.error(`Error fetching userGroups[${i}], attempt ${4 - attempts}:`, error);
                             attempts--;
-                            if (attempts === 0) break; // Exit on final failure
-                            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
+                            if (attempts === 0) break;
+                            await new Promise(resolve => setTimeout(resolve, 1000));
                         }
                     }
-                    if (attempts === 0) break; // Stop if last attempt failed
+                    if (attempts === 0) break;
                 }
-                console.log('Found group IDs:', groupIds); // Debug log
+                console.log('Found group IDs:', groupIds);
                 groupSelect.innerHTML = '<option value="" disabled selected>Select a group</option>';
                 if (groupIds.length === 0) {
                     groupSelect.innerHTML += '<option value="create">Create a new group</option>';
@@ -151,8 +147,13 @@
                     for (let groupId of groupIds) {
                         try {
                             const result = await window.getContract().methods.getGroup(groupId).call();
-                            console.log(`Group ${groupId} result:`, result); // Debug log
+                            console.log(`Group ${groupId} result:`, result);
                             const name = result[0] || result.name || 'Unnamed Group';
+                            const members = result[1] || result.members || [];
+                            if (!members || !Array.isArray(members)) {
+                                console.warn(`Group ${groupId} has invalid members array:`, members);
+                                continue;
+                            }
                             const option = document.createElement('option');
                             option.value = groupId;
                             option.textContent = `${name} (ID: ${groupId})`;
@@ -173,10 +174,10 @@
                 createGroupBtn.style.display = 'block';
                 expenseMessage.textContent = 'Error loading groups. Please try again.';
             }
-            // Listen for group selection changes
             groupSelect.addEventListener('change', function() {
                 groupCreationDiv.style.display = this.value === 'create' ? 'block' : 'none';
                 createGroupBtn.style.display = this.value === 'create' ? 'none' : 'block';
+                groupCreationDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
             });
         }
 
@@ -184,6 +185,7 @@
             document.getElementById('groupCreation').style.display = 'block';
             document.getElementById('createGroupBtn').style.display = 'none';
             document.getElementById('groupId').value = 'create';
+            document.getElementById('groupCreation').scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
 
         function addMemberField() {
@@ -235,7 +237,7 @@
                 const members = Array.from(memberInputs)
                     .map(input => input.value.trim().toLowerCase())
                     .filter(addr => addr.match(/^0x[a-f0-9]{40}$/));
-                console.log('Submitting members:', members); // Debug log
+                console.log('Submitting members:', members);
                 if (members.length < 2) {
                     groupMessage.textContent = 'Please include at least two valid Ethereum addresses (including yours).';
                     return;
@@ -248,7 +250,7 @@
                 const tx = await window.getContract().methods.createGroup(groupName, members).send({
                     from: window.getAccount(),
                     value: '0',
-                    type: '0x0' // Use legacy transaction
+                    type: '0x0'
                 });
                 groupMessage.textContent = `Group created! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`;
                 this.reset();
@@ -265,6 +267,8 @@
                     </div>
                 `;
                 document.getElementById('groupCreation').style.display = 'none';
+                document.getElementById('createGroupBtn').style.display = 'block';
+                document.getElementById('groupId').value = '';
                 await populateGroupDropdown();
             } catch (error) {
                 console.error('Group creation error:', error);
@@ -326,7 +330,7 @@
                 const tx = await window.getContract().methods.addExpense(groupId, description, amount, splitType, customShares).send({
                     from: window.getAccount(),
                     value: '0',
-                    type: '0x0' // Use legacy transaction
+                    type: '0x0'
                 });
                 expenseMessage.textContent = `Expense added! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`;
                 this.reset();
