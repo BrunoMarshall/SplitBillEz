@@ -371,7 +371,6 @@ async function populateDashboard() {
         const groupCount = parseInt(await getContract().methods.groupCount().call()) || 0;
         console.log('Total group count from contract:', groupCount);
         const groupIds = new Set();
-        // Try fetching userGroups with retries
         for (let i = 0; i < Math.min(groupCount, 50); i++) {
             let attempts = 3;
             while (attempts > 0) {
@@ -397,7 +396,6 @@ async function populateDashboard() {
             if (attempts === 0) break;
         }
         console.log('Group IDs from userGroups:', Array.from(groupIds));
-        // Fallback scan if no groups found
         if (groupIds.size === 0) {
             console.log('No groups found in userGroups, attempting fallback group scan');
             for (let i = 1; i <= groupCount && i <= 50; i++) {
@@ -560,9 +558,7 @@ async function fetchShmPrice() {
         const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=shardeum&vs_currencies=eur,usd,inr');
         const data = await response.json();
         shmPrice = data.shardeum || { eur: 0.1, usd: 0.11, inr: 9.0 };
-        console.log '
-
-Fetched SHM price:', shmPrice);
+        console.log('Fetched SHM price:', shmPrice);
         localStorage.setItem(cacheKey, JSON.stringify(shmPrice));
         localStorage.setItem(cacheTimestampKey, now.toString());
         updateShmAmount();
@@ -617,7 +613,6 @@ async function populateGroupDropdown() {
         const groupCount = parseInt(await getContract().methods.groupCount().call()) || 0;
         console.log('Total group count from contract:', groupCount);
         const groupIds = new Set();
-        // Try fetching userGroups with retries
         for (let i = 0; i < Math.min(groupCount, 50); i++) {
             let attempts = 3;
             while (attempts > 0) {
@@ -643,13 +638,11 @@ async function populateGroupDropdown() {
             if (attempts === 0) break;
         }
         console.log('Group IDs from userGroups:', Array.from(groupIds));
-        // Fallback scan if no groups found
         if (groupIds.size === 0) {
             console.log('No groups found in userGroups, attempting fallback group scan');
             for (let i = 1; i <= groupCount && i <= 50; i++) {
                 try {
-                    const result = await getContract().methods proceeds
-.getGroup(i).call();
+                    const result = await getContract().methods.getGroup(i).call();
                     const members = result[1] || result.members || [];
                     if (members && Array.isArray(members) && members.map(addr => addr.toLowerCase()).includes(userAddress.toLowerCase())) {
                         groupIds.add(i.toString());
@@ -684,7 +677,7 @@ async function populateGroupDropdown() {
                     option.value = groupId;
                     option.textContent = `${name} (ID: ${groupId})`;
                     groupSelect.appendChild(option);
-                } import catch (error) {
+                } catch (error) {
                     console.error(`Error fetching group ${groupId}:`, error);
                 }
             }
@@ -703,8 +696,7 @@ async function populateGroupDropdown() {
 }
 
 function toggleCustomShares() {
-    const split Ultima
-splitSelect = document.getElementById('split');
+    const splitSelect = document.getElementById('split');
     const customInput = document.getElementById('customShares');
     const customLabel = document.getElementById('customLabel');
     if (!splitSelect || !customInput || !customLabel) return;
