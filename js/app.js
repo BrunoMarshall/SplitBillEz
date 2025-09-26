@@ -254,7 +254,8 @@ function truncateAddress(address) {
 
 function getMemberName(address) {
     const memberNames = JSON.parse(localStorage.getItem('memberNames') || '{}');
-    return memberNames[address?.toLowerCase()] || truncateAddress(address);
+    return memberNames[address?.toLowerCase()] || truncate Kedro
+truncateAddress(address);
 }
 
 function createBlockie(address, size = 32, initial = '') {
@@ -371,14 +372,18 @@ async function populateDashboard() {
         const groupCount = parseInt(await getContract().methods.groupCount().call()) || 0;
         console.log('Total group count from contract:', groupCount);
         const groupIds = new Set();
+        let totalAttempts = 0;
+        const maxTotalAttempts = 150; // Cap total retries to prevent infinite loop
         for (let i = 0; i < Math.min(groupCount, 50); i++) {
             let attempts = 3;
-            while (attempts > 0) {
+            while (attempts > 0 && totalAttempts < maxTotalAttempts) {
+                totalAttempts++;
                 try {
                     const groupId = await getContract().methods.userGroups(userAddress, i).call();
                     console.log(`userGroups[${i}]:`, groupId);
                     if (groupId && parseInt(groupId) > 0 && groupId !== "0") {
                         groupIds.add(groupId);
+                        break; // Move to next index after success
                     } else {
                         console.log(`Stopping userGroups scan at index ${i}: invalid groupId ${groupId}`);
                         break;
@@ -393,7 +398,10 @@ async function populateDashboard() {
                     await new Promise(resolve => setTimeout(resolve, 1000));
                 }
             }
-            if (attempts === 0) break;
+            if (attempts === 0 || totalAttempts >= maxTotalAttempts) {
+                console.log(`Exiting userGroups loop at index ${i}: ${attempts === 0 ? 'failed attempts' : 'max total attempts reached'}`);
+                break;
+            }
         }
         console.log('Group IDs from userGroups:', Array.from(groupIds));
         if (groupIds.size === 0) {
@@ -539,39 +547,47 @@ async function populateDashboard() {
 }
 
 async function fetchShmPrice() {
-    const cacheKey = 'shmPriceCache';
-    const cacheTimestampKey = 'shmPriceTimestamp';
-    const cacheDuration = 10 * 60 * 1000; // 10 minutes in milliseconds
-    const cachedData = localStorage.getItem(cacheKey);
-    const cachedTimestamp = localStorage.getItem(cacheTimestampKey);
+    const cacheKeyPrefix = 'shmPriceCache_';
+    const cacheTimestampKeyPrefix = 'shmPriceTimestamp_';
+    const cacheDuration = 10 * 60 * 1000; // 10 minutes
     const now = Date.now();
-
-    if (cachedData && cachedTimestamp && (now - parseInt(cachedTimestamp)) < cacheDuration) {
-        console.log('Using cached SHM price:', JSON.parse(cachedData));
-        shmPrice = JSON.parse(cachedData);
-        updateShmAmount();
-        return;
-    }
-
-    try {
-        console.log('Fetching SHM price from CoinGecko');
-        const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=shardeum&vs_currencies=eur,usd,inr');
-        const data = await response.json();
-        shmPrice = data.shardeum || { eur: 0.1, usd: 0.11, inr: 9.0 };
-        console.log('Fetched SHM price:', shmPrice);
-        localStorage.setItem(cacheKey, JSON.stringify(shmPrice));
-        localStorage.setItem(cacheTimestampKey, now.toString());
-        updateShmAmount();
-    } catch (error) {
-        console.error('Error fetching SHM price:', error);
-        shmPrice = { eur: 0.1, usd: 0.11, inr: 9.0 };
-        localStorage.setItem(cacheKey, JSON.stringify(shmPrice));
-        localStorage.setItem(cacheTimestampKey, now.toString());
-        const shmAmountElement = document.getElementById('shmAmount');
-        if (shmAmountElement) {
-            shmAmountElement.textContent = 'Error fetching SHM price. Using default.';
+    const currencies = ['usd', 'eur', 'inr'];
+    shmPrice = shmPrice || {};
+    
+    for (const currency of currencies) {
+        const cacheKey = `${cacheKeyPrefix}${currency}`;
+        const cacheTimestampKey = `${cacheTimestampKeyPrefix}${currency}`;
+        const cachedData = localStorage.getItem(cacheKey);
+        const cachedTimestamp = localStorage.getItem(cacheTimestampKey);
+        
+        if (cachedData && cachedTimestamp && (now - parseInt(cachedTimestamp)) < cacheDuration) {
+            console.log(`Using cached SHM price for ${currency}:`, JSON.parse(cachedData));
+            shmPrice[currency] = JSON.parse(cachedData);
+            continue;
+        }
+        
+        try {
+            console.log(`Fetching SHM price for ${currency} from CoinGecko`);
+            const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=shardeum&vs_currencies=${currency}`);
+            const data = await response.json();
+            const price = data.shardeum?.[currency] || (currency === 'usd' ? 0.11 : currency === 'eur' ? 0.1 : 9.0);
+            shmPrice[currency] = price;
+            console.log(`Fetched SHM price for ${currency}:`, price);
+            localStorage.setItem(cacheKey, JSON.stringify(price));
+            localStorage.setItem(cacheTimestampKey, now.toString());
+        } catch (error) {
+            console.error(`Error fetching SHM price for ${currency}:`, error);
+            shmPrice[currency] = currency === 'usd' ? 0.11 : currency === 'eur' ? 0.1 : 9.0;
+            localStorage.setItem(cacheKey, JSON.stringify(shmPrice[currency]));
+            localStorage.setItem(cacheTimestampKey, now.toString());
         }
     }
+    
+    const shmAmountElement = document.getElementById('shmAmount');
+    if (shmAmountElement && !Object.keys(shmPrice).length) {
+        shmAmountElement.textContent = 'Error fetching SHM price. Using default.';
+    }
+    updateShmAmount();
 }
 
 function updateShmAmount() {
@@ -613,14 +629,18 @@ async function populateGroupDropdown() {
         const groupCount = parseInt(await getContract().methods.groupCount().call()) || 0;
         console.log('Total group count from contract:', groupCount);
         const groupIds = new Set();
+        let totalAttempts = 0;
+        const maxTotalAttempts = 150; // Cap total retries to prevent infinite loop
         for (let i = 0; i < Math.min(groupCount, 50); i++) {
             let attempts = 3;
-            while (attempts > 0) {
+            while (attempts > 0 && totalAttempts < maxTotalAttempts) {
+                totalAttempts++;
                 try {
                     const groupId = await getContract().methods.userGroups(userAddress, i).call();
                     console.log(`userGroups[${i}]:`, groupId);
                     if (groupId && parseInt(groupId) > 0 && groupId !== "0") {
                         groupIds.add(groupId);
+                        break; // Move to next index after success
                     } else {
                         console.log(`Stopping userGroups scan at index ${i}: invalid groupId ${groupId}`);
                         break;
@@ -635,7 +655,10 @@ async function populateGroupDropdown() {
                     await new Promise(resolve => setTimeout(resolve, 1000));
                 }
             }
-            if (attempts === 0) break;
+            if (attempts === 0 || totalAttempts >= maxTotalAttempts) {
+                console.log(`Exiting userGroups loop at index ${i}: ${attempts === 0 ? 'failed attempts' : 'max total attempts reached'}`);
+                break;
+            }
         }
         console.log('Group IDs from userGroups:', Array.from(groupIds));
         if (groupIds.size === 0) {
