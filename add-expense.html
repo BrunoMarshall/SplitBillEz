@@ -9,7 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/web3@4.16.0/dist/web3.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/ethereum-blockies-base64@0.1.0/dist/ethereum-blockies-base64.min.js"></script>
 </head>
-<body onload="checkMetaMaskConnection()">
+<body onload="window.checkMetaMaskConnection()">
     <header>
         <div class="header-container">
             <img src="images/splitbillez_logo.png" alt="SplitBillEz Logo" class="logo">
@@ -18,7 +18,7 @@
                 <a href="dashboard.html">Dashboard</a>
                 <a href="add-expense.html">Add Expense</a>
             </nav>
-            <button class="metamask-button" onclick="handleMetaMaskToggle().then(() => populateGroupDropdown())">Connect with MetaMask</button>
+            <button class="metamask-button" onclick="window.handleMetaMaskToggle().then(() => window.populateGroupDropdown())">Connect with MetaMask</button>
         </div>
     </header>
     <main>
@@ -61,10 +61,10 @@
                         <div class="member-input">
                             <input type="text" class="member-name" placeholder="Member Name (e.g., Bob)">
                             <input type="text" class="member-address" placeholder="e.g., 0x742d...">
-                            <button type="button" class="remove-member" onclick="removeMember(this)">Remove</button>
+                            <button type="button" class="remove-member" onclick="window.removeMember(this)">Remove</button>
                         </div>
                     </div>
-                    <button type="button" onclick="addMemberField()">Add Member</button>
+                    <button type="button" onclick="window.addMemberField()">Add Member</button>
                 </div>
                 <button type="submit" id="submitButton" class="submit-group">Add Expense</button>
                 <p id="expenseMessage"></p>
@@ -104,7 +104,7 @@
                 const data = await response.json();
                 shmPrice = data.shardeum || { eur: 0, usd: 0, inr: 0 };
                 console.log('Fetched SHM price:', shmPrice);
-                updateShmAmount();
+                window.updateShmAmount();
             } catch (error) {
                 console.error('Error fetching SHM price:', error);
                 document.getElementById('shmAmount').textContent = 'Error fetching SHM price. Using default.';
@@ -138,7 +138,7 @@
                     if (account) {
                         document.getElementById('userAddress').value = account;
                         await fetchShmPrice();
-                        await populateGroupDropdown();
+                        await window.populateGroupDropdown();
                     } else {
                         console.log('No account connected, waiting for user to connect MetaMask');
                         document.getElementById('expenseMessage').textContent = 'Please connect MetaMask to load groups.';
@@ -256,7 +256,7 @@
             div.innerHTML = `
                 <input type="text" class="member-name" placeholder="Member Name (e.g., Bob)">
                 <input type="text" class="member-address" placeholder="e.g., 0x742d...">
-                <button type="button" class="remove-member" onclick="removeMember(this)">Remove</button>
+                <button type="button" class="remove-member" onclick="window.removeMember(this)">Remove</button>
             `;
             memberInputs.appendChild(div);
             updateRemoveButtons();
@@ -330,7 +330,7 @@
                     groupCreationDiv.style.display = 'none';
                     submitButton.textContent = 'Add Expense';
                     this.reset();
-                    await populateGroupDropdown();
+                    await window.populateGroupDropdown();
                     const groupCount = await window.getContract().methods.groupCount().call();
                     document.getElementById('groupId').value = parseInt(groupCount) - 1;
                     return;
@@ -385,7 +385,7 @@
                 this.reset();
                 document.getElementById('customShares').style.display = 'none';
                 document.getElementById('customLabel').style.display = 'none';
-                await populateGroupDropdown();
+                await window.populateGroupDropdown();
             } catch (error) {
                 console.error('Expense error:', error);
                 expenseMessage.textContent = 'Error: ' + (error.message.includes('Eip1559NotSupportedError') ? 'Network does not support EIP-1559. Try again.' : error.message.includes('revert') ? 'Invalid input or contract revert. Check group ID and try again.' : error.message);
@@ -401,8 +401,16 @@
             customLabel.style.display = show ? 'block' : 'none';
         });
 
-        document.getElementById('amount').addEventListener('input', updateShmAmount);
-        document.getElementById('currency').addEventListener('change', updateShmAmount);
+        document.getElementById('amount').addEventListener('input', window.updateShmAmount);
+        document.getElementById('currency').addEventListener('change', window.updateShmAmount);
+
+        // Export functions for add-expense.html
+        window.fetchShmPrice = fetchShmPrice;
+        window.updateShmAmount = updateShmAmount;
+        window.populateGroupDropdown = populateGroupDropdown;
+        window.addMemberField = addMemberField;
+        window.removeMember = removeMember;
+        window.updateRemoveButtons = updateRemoveButtons;
     </script>
 </body>
 </html>

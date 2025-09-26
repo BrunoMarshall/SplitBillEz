@@ -445,6 +445,250 @@ async function updateUI() {
     });
 }
 
+function truncateAddress(address) {
+    if (!address || typeof address !== 'string' || address.length < 10) return 'Unknown';
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function getMemberName(address) {
+    const memberNames = JSON.parse(localStorage.getItem('memberNames') || '{}');
+    return memberNames[address.toLowerCase()] || truncateAddress(address);
+}
+
+function createBlockie(address, size = 32, initial = '') {
+    try {
+        if (typeof makeBlockie !== 'function') {
+            console.warn('Blockies library not loaded, using fallback image');
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#ccc';
+            ctx.fillRect(0, 0, size, size);
+            if (initial) {
+                ctx.fillStyle = 'white';
+                ctx.font = `${size / 2}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(initial, size / 2, size / 2);
+            }
+            return canvas.toDataURL();
+        }
+        const blockie = makeBlockie(address || '0x0');
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(blockie, 0, 0, size, size);
+        if (initial) {
+            ctx.fillStyle = 'white';
+            ctx.font = `${size / 2}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(initial, size / 2, size / 2);
+        }
+        return canvas.toDataURL();
+    } catch (error) {
+        console.error('Error creating Blockie:', error);
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ccc';
+        ctx.fillRect(0, 0, size, size);
+        if (initial) {
+            ctx.fillStyle = 'white';
+            ctx.font = `${size / 2}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(initial, size / 2, size / 2);
+        }
+        return canvas.toDataURL();
+    }
+}
+
+async function checkMetaMaskConnection() {
+    console.log('Checking MetaMask connection on page load...');
+    try {
+        if (window.ethereum) {
+            console.log('MetaMask provider detected');
+            if (!window.web3 || !window.web3.utils) {
+                console.log('Initializing Web3...');
+                await window.initWeb3();
+            }
+            const account = await window.getAccount();
+            console.log('MetaMask connected on load:', account);
+            if (account) {
+                await window.populateDashboard();
+            } else {
+                console.log('No account connected, waiting for user to connect MetaMask');
+                document.getElementById('dashboardContent').innerHTML = 'Please connect MetaMask to view your groups.';
+            }
+        } else {
+            console.log('MetaMask not detected');
+            document.getElementById('dashboardContent').innerHTML = 'MetaMask not detected. Please install MetaMask and refresh.';
+        }
+    } catch (error) {
+        console.error('Error checking MetaMask connection:', error);
+        document.getElementById('dashboardContent').innerHTML = 'Error checking MetaMask connection: ' + error.message + '. Please refresh and reconnect MetaMask.';
+    }
+}
+
+async function populateDashboard() {
+    const dashboardContent = document.getElementById('dashboardContent');
+    if (!dashboardContent) {
+        console.error('dashboardContent element not found');
+        return;
+    }
+    dashboardContent.innerHTML = '<p>Loading groups...</p>';
+    if (!window.web3 || !window.web3.utils || !window.getContract() || !window.getAccount()) {
+        dashboardContent.innerHTML = '<p>Please connect MetaMask to view your groups.</p>';
+        return;
+    }
+    try {
+        const userAddress = await window.getAccount();
+        console.log('Fetching groups for dashboard:', userAddress);
+        const groupIds = [];
+        for (let i = 0; i < 50; i++) {
+            let attempts = 3;
+            while (attempts > 0) {
+                try {
+                    const groupId = await window.getContract().methods.userGroups(userAddress, i).call();
+                    console.log(`userGroups[${i}]:`, groupId);
+                    if (parseInt(groupId) >= 0 && groupId !== "" && groupId !== "0") {
+                        groupIds.push(groupId);
+                    } else {
+                        console.log(`Stopping at index ${i}: invalid groupId ${groupId}`);
+                        attempts = 0; // Break loop on invalid groupId
+                    }
+                    break;
+                } catch (error) {
+                    console.error(`Error fetching userGroups[${i}], attempt ${4 - attempts}:`, error);
+                    attempts--;
+                    if (attempts === 0) {
+                        console.log(`Stopping at index ${i} after failed attempts`);
+                        break;
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+            if (attempts === 0) break;
+        }
+        console.log('Dashboard group IDs:', groupIds);
+        if (groupIds.length === 0) {
+            dashboardContent.innerHTML = '<p>No groups found. Create one in the Add Expense page.</p>';
+            return;
+        }
+        const events = await window.getContract().getPastEvents('ExpenseAdded', { fromBlock: 0, toBlock: 'latest' });
+        console.log('ExpenseAdded events:', events);
+        dashboardContent.innerHTML = '';
+        for (let groupId of groupIds) {
+            try {
+                const result = await window.getContract().methods.getGroup(groupId).call();
+                console.log(`Group ${groupId} result:`, result);
+                const name = result[0] || result.name || 'Unnamed Group';
+                const members = result[1] || result.members || [];
+                if (!members || !Array.isArray(members)) {
+                    console.warn(`Group ${groupId} has invalid members array:`, members);
+                    continue;
+                }
+                let balMembers = [], balances = [];
+                try {
+                    const balanceData = await window.getContract().methods.getGroupBalances(groupId).call();
+                    balMembers = balanceData[0] || balanceData.members || [];
+                    balances = balanceData[1] || balanceData.balances || [];
+                    console.log(`Group ${groupId} balances:`, { balMembers, balances });
+                } catch (error) {
+                    console.error(`Error fetching balances for group ${groupId}:`, error);
+                }
+                const groupExpenses = events
+                    .filter(event => String(event.returnValues.groupId) === String(groupId))
+                    .map(event => ({
+                        id: event.returnValues.expenseId,
+                        description: event.returnValues.description || 'No description',
+                        amount: window.web3.utils.fromWei(event.returnValues.amount || '0', 'ether'),
+                        payer: event.returnValues.payer || 'Unknown',
+                        splitType: event.returnValues.splitType || 'Unknown', // Adjust if splitType is available
+                        timestamp: event.blockNumber ? new Date((await window.web3.eth.getBlock(event.blockNumber)).timestamp * 1000).toLocaleString() : 'N/A'
+                    }));
+                console.log(`Group ${groupId} expenses:`, groupExpenses);
+                const groupBlockie = window.createBlockie(groupId.toString(), 64);
+                const groupDiv = document.createElement('div');
+                groupDiv.className = 'group';
+                groupDiv.innerHTML = `
+                    <img src="${groupBlockie}" alt="Group ${groupId} Avatar" class="group-avatar">
+                    <h3>${name} (ID: ${groupId})</h3>
+                    <p><strong>Members:</strong> ${members.map(addr => {
+                        const initial = window.getMemberName(addr)[0].toUpperCase();
+                        return `<img src="${window.createBlockie(addr, 32, initial)}" class="member-avatar" alt="${window.getMemberName(addr)} Avatar"> ${window.getMemberName(addr)}`;
+                    }).join(', ')}</p>
+                    <h4>Expenses:</h4>
+                    ${groupExpenses.length > 0 ? groupExpenses.map(exp => `
+                        <p>Expense ${exp.id}: ${exp.description} - ${exp.amount} SHM (Payer: <img src="${window.createBlockie(exp.payer, 32, window.getMemberName(exp.payer)[0].toUpperCase())}" class="member-avatar" alt="${window.getMemberName(exp.payer)} Avatar"> ${window.getMemberName(exp.payer)}, Split: ${exp.splitType}, Date: ${exp.timestamp})</p>
+                    `).join('') : '<p>No expenses found.</p>'}
+                    <h4>Balances:</h4>
+                    ${balMembers.length > 0 ? balMembers.map((addr, i) => `
+                        <p><img src="${window.createBlockie(addr, 32, window.getMemberName(addr)[0].toUpperCase())}" class="member-avatar" alt="${window.getMemberName(addr)} Avatar"> ${window.getMemberName(addr)}: ${parseFloat(window.web3.utils.fromWei(balances[i] || '0', 'ether')).toFixed(2)} SHM</p>
+                    `).join('') : '<p>No balances available.</p>'}
+                    <h4>Settle Debt</h4>
+                    <form id="settleDebtForm-${groupId}" class="settle-debt-form">
+                        <input type="hidden" name="groupId" value="${groupId}">
+                        <label for="settleTo-${groupId}">Pay To:</label>
+                        <select id="settleTo-${groupId}" required>
+                            <option value="" disabled selected>Select a member</option>
+                            ${members
+                                .filter(addr => addr.toLowerCase() !== userAddress.toLowerCase())
+                                .map(addr => `<option value="${addr}">${window.getMemberName(addr)}</option>`)
+                                .join('')}
+                        </select>
+                        <label for="settleAmount-${groupId}">Amount (SHM):</label>
+                        <input type="number" id="settleAmount-${groupId}" placeholder="e.g., 10" step="0.01" required>
+                        <button type="submit" class="submit-group">Settle Debt</button>
+                    </form>
+                    <p id="settleMessage-${groupId}"></p>
+                `;
+                dashboardContent.appendChild(groupDiv);
+                document.getElementById(`settleDebtForm-${groupId}`).addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    if (!window.web3 || !window.web3.utils || !window.getContract() || !window.getAccount()) {
+                        alert('Please connect MetaMask first.');
+                        return;
+                    }
+                    const settleGroupId = groupId;
+                    const toAddress = document.getElementById(`settleTo-${groupId}`).value;
+                    const amountInput = document.getElementById(`settleAmount-${groupId}`).value;
+                    const settleMessage = document.getElementById(`settleMessage-${groupId}`);
+                    let amount;
+                    try {
+                        amount = window.web3.utils.toWei(amountInput, 'ether');
+                    } catch (error) {
+                        settleMessage.textContent = 'Invalid amount format. Please enter a valid number.';
+                        return;
+                    }
+                    try {
+                        const tx = await window.getContract().methods.settleDebt(settleGroupId, toAddress, amount).send({
+                            from: await window.getAccount(),
+                            value: '0',
+                            type: '0x0'
+                        });
+                        settleMessage.textContent = `Debt settled! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`;
+                        this.reset();
+                        await window.populateDashboard();
+                    } catch (error) {
+                        console.error(`Debt settlement error for group ${settleGroupId}:`, error);
+                        settleMessage.textContent = 'Error: ' + (error.message.includes('Eip1559NotSupportedError') ? 'Network does not support EIP-1559. Try again.' : error.message.includes('revert') ? 'Invalid input or contract revert. Check inputs and try again.' : error.message);
+                    }
+                });
+            } catch (error) {
+                console.error(`Error processing group ${groupId}:`, error);
+            }
+        }
+    } catch (error) {
+        console.error('Error populating dashboard:', error);
+        dashboardContent.innerHTML = '<p>Error loading groups. Please try again.</p>';
+    }
+}
+
 // Export globals
 window.initWeb3 = initWeb3;
 window.disconnectWallet = disconnectWallet;
@@ -452,3 +696,8 @@ window.handleMetaMaskToggle = handleMetaMaskToggle;
 window.getContract = () => contract;
 window.getAccount = () => userAccount;
 window.web3 = web3;
+window.truncateAddress = truncateAddress;
+window.getMemberName = getMemberName;
+window.createBlockie = createBlockie;
+window.checkMetaMaskConnection = checkMetaMaskConnection;
+window.populateDashboard = populateDashboard;
