@@ -7,7 +7,6 @@
     <link rel="stylesheet" href="css/style.css">
     <link rel="icon" href="images/splitbillez_favicon.png">
     <script src="https://cdn.jsdelivr.net/npm/web3@4.16.0/dist/web3.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/ethereum-blockies-base64@0.1.0/dist/index.min.js"></script>
 </head>
 <body onload="initWeb3().then(populateDashboard)">
     <header>
@@ -54,6 +53,49 @@
     </footer>
     <script src="js/app.js"></script>
     <script>
+        // Manual Blockies implementation
+        function createGroupAvatar(groupId) {
+            try {
+                const seed = String(groupId);
+                const canvas = document.createElement('canvas');
+                canvas.width = 32;
+                canvas.height = 32;
+                const ctx = canvas.getContext('2d');
+
+                // Simple hash for deterministic colors
+                let hash = 0;
+                for (let i = 0; i < seed.length; i++) {
+                    hash = seed.charCodeAt(i) + ((hash << 5) - hash);
+                }
+
+                // Generate colors (RGB)
+                const colors = [
+                    `rgb(${(hash & 0xff0000) >> 16}, ${(hash & 0x00ff00) >> 8}, ${hash & 0x0000ff})`,
+                    `rgb(${((hash >> 8) & 0xff0000) >> 16}, ${((hash >> 8) & 0x00ff00) >> 8}, ${(hash >> 8) & 0x0000ff})`
+                ];
+
+                // Draw 8x8 grid
+                const size = 4; // 32px / 8 = 4px per block
+                for (let x = 0; x < 8; x++) {
+                    for (let y = 0; y < 8; y++) {
+                        ctx.fillStyle = colors[(x * y + hash) % 2];
+                        ctx.fillRect(x * size, y * size, size, size);
+                    }
+                }
+                return canvas.toDataURL();
+            } catch (error) {
+                console.error('Error generating group avatar for groupId ' + groupId + ':', error);
+                // Fallback: Gray square
+                const canvas = document.createElement('canvas');
+                canvas.width = 32;
+                canvas.height = 32;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#ccc';
+                ctx.fillRect(0, 0, 32, 32);
+                return canvas.toDataURL();
+            }
+        }
+
         function truncateAddress(address) {
             if (!address || typeof address !== 'string' || address.length < 10) return 'Unknown';
             return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -87,27 +129,16 @@
             return canvas.toDataURL();
         }
 
-        function createGroupAvatar(groupId) {
-            try {
-                return makeBlockie(String(groupId));
-            } catch (error) {
-                console.error('Error generating group avatar for groupId ' + groupId + ':', error);
-                // Fallback: Gray square
-                const canvas = document.createElement('canvas');
-                canvas.width = 32;
-                canvas.height = 32;
-                const ctx = canvas.getContext('2d');
-                ctx.fillStyle = '#ccc';
-                ctx.fillRect(0, 0, 32, 32);
-                return canvas.toDataURL();
-            }
-        }
-
         async function populateDashboard() {
             const dashboardContent = document.getElementById('dashboardContent');
             dashboardContent.innerHTML = '<p>Loading groups...</p>';
             if (!window.getContract() || !window.getAccount()) {
                 dashboardContent.innerHTML = '<p>Please connect MetaMask to view your groups.</p>';
+                return;
+            }
+            if (!window.web3 || !window.web3.utils) {
+                console.error('Web3.utils is not initialized');
+                dashboardContent.innerHTML = '<p>Error: Web3.js not properly initialized. Please refresh and reconnect MetaMask.</p>';
                 return;
             }
             try {
@@ -157,6 +188,8 @@
                             console.log(`Group ${groupId} balances:`, { balMembers, balances });
                         } catch (error) {
                             console.error(`Error fetching balances for group ${groupId}:`, error);
+                            balances = [];
+                            balMembers = [];
                         }
                         let expenseCount = 0;
                         try {
@@ -180,7 +213,7 @@
                                         expenses.push({
                                             id: i,
                                             description: expense.description || 'No description',
-                                            amount: window.web3.utils.fromWei(expense.amount || '0', 'ether'),
+                                            amount: expense.amount ? window.web3.utils.fromWei(expense.amount, 'ether') : '0',
                                             payer: expense.payer || 'Unknown',
                                             splitType: expense.splitType || 'Unknown',
                                             timestamp: expense.timestamp && parseInt(expense.timestamp) > 0
@@ -217,7 +250,7 @@
                             <h4>Balances:</h4>
                             ${balMembers.length > 0 ? balMembers.map((addr, i) => `
                                 <p><span class="member"><img src="${createInitialsAvatar(getMemberName(addr))}" class="user-avatar" alt="User Avatar"> ${getMemberName(addr)}</span>: 
-                                ${parseFloat(window.web3.utils.fromWei(balances[i] || '0', 'ether')).toFixed(2)} SHM</p>
+                                ${balances[i] ? parseFloat(window.web3.utils.fromWei(balances[i], 'ether')).toFixed(2) : '0.00'} SHM</p>
                             `).join('') : '<p>No balances available.</p>'}
                             <h4>Settle Debt</h4>
                             <form id="settleDebtForm-${groupId}" class="settle-debt-form">
