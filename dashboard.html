@@ -147,7 +147,7 @@
                         for (let i = 0; i < expenseCount; i++) {
                             try {
                                 const expense = await window.getContract().methods.expenses(i).call();
-                                if (expense.groupId === groupId) {
+                                if (parseInt(expense.groupId) === parseInt(groupId)) {
                                     expenses.push({
                                         id: i,
                                         description: expense.description,

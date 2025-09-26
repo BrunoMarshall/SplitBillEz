@@ -40,14 +40,10 @@
                     <option value="" disabled selected>Select a group</option>
                 </select>
                 <button type="button" id="createGroupBtn" onclick="showGroupCreation()">Create Group</button>
-                <button type="submit">Add Expense</button>
-            </form>
-            <p id="expenseMessage"></p>
-            <div id="groupCreation" style="display:none;">
-                <h3>Create a New Group</h3>
-                <form id="groupForm">
+                <div id="groupCreation" style="display:none;">
+                    <h3>Create a New Group</h3>
                     <label for="groupName">Group Name:</label>
-                    <input type="text" id="groupName" placeholder="e.g., Trip to Goa" required>
+                    <input type="text" id="groupName" placeholder="e.g., Trip to Goa">
                     <label>Member Addresses:</label>
                     <div id="memberInputs">
                         <div class="member-input">
@@ -56,16 +52,16 @@
                             <span class="member-label">Your Address</span>
                         </div>
                         <div class="member-input">
-                            <input type="text" class="member-name" placeholder="Member Name (e.g., Bob)" required>
-                            <input type="text" class="member-address" placeholder="e.g., 0x742d..." required>
+                            <input type="text" class="member-name" placeholder="Member Name (e.g., Bob)">
+                            <input type="text" class="member-address" placeholder="e.g., 0x742d...">
                             <button type="button" class="remove-member" onclick="removeMember(this)">Remove</button>
                         </div>
                     </div>
                     <button type="button" onclick="addMemberField()">Add Member</button>
-                    <button type="submit" class="submit-group">Submit Group</button>
-                </form>
-                <p id="groupMessage"></p>
-            </div>
+                </div>
+                <button type="submit" id="submitButton">Add Expense</button>
+                <p id="expenseMessage"></p>
+            </form>
         </section>
     </main>
     <footer>
@@ -97,22 +93,21 @@
             const groupSelect = document.getElementById('groupId');
             const groupCreationDiv = document.getElementById('groupCreation');
             const createGroupBtn = document.getElementById('createGroupBtn');
+            const submitButton = document.getElementById('submitButton');
             const expenseMessage = document.getElementById('expenseMessage');
             groupSelect.innerHTML = '<option value="" disabled selected>Loading groups...</option>';
             if (!window.getContract() || !window.getAccount()) {
                 groupSelect.innerHTML = '<option value="" disabled selected>Connect wallet first</option>';
                 groupCreationDiv.style.display = 'none';
                 createGroupBtn.style.display = 'block';
+                submitButton.textContent = 'Add Expense';
                 expenseMessage.textContent = 'Please connect MetaMask to view groups.';
                 return;
             }
             try {
                 const userAddress = window.getAccount();
                 console.log('Fetching groups for:', userAddress);
-                const userAddressInput = document.getElementById('userAddress');
-                if (userAddressInput) {
-                    userAddressInput.value = userAddress;
-                }
+                document.getElementById('userAddress').value = userAddress;
                 const groupIds = [];
                 for (let i = 0; i < 50; i++) {
                     let attempts = 3;
@@ -139,10 +134,12 @@
                     groupSelect.innerHTML += '<option value="create">Create a new group</option>';
                     groupCreationDiv.style.display = 'block';
                     createGroupBtn.style.display = 'block';
+                    submitButton.textContent = 'Create Group';
                     expenseMessage.textContent = 'No groups found. Create one to add expenses.';
                 } else {
                     groupCreationDiv.style.display = 'none';
                     createGroupBtn.style.display = 'block';
+                    submitButton.textContent = 'Add Expense';
                     expenseMessage.textContent = '';
                     for (let groupId of groupIds) {
                         try {
@@ -172,12 +169,13 @@
                 groupSelect.innerHTML = '<option value="" disabled selected>Error loading groups</option><option value="create">Create a new group</option>';
                 groupCreationDiv.style.display = 'block';
                 createGroupBtn.style.display = 'block';
-                expenseMessage.textContent = 'Error loading groups. Please try again.';
+                submitButton.textContent = 'Create Group';
+                expenseMessage.textContent = 'Error loading groups. Please create a new group.';
             }
             groupSelect.addEventListener('change', function() {
                 groupCreationDiv.style.display = this.value === 'create' ? 'block' : 'none';
                 createGroupBtn.style.display = this.value === 'create' ? 'none' : 'block';
-                groupCreationDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                submitButton.textContent = this.value === 'create' ? 'Create Group' : 'Add Expense';
             });
         }
 
@@ -185,7 +183,7 @@
             document.getElementById('groupCreation').style.display = 'block';
             document.getElementById('createGroupBtn').style.display = 'none';
             document.getElementById('groupId').value = 'create';
-            document.getElementById('groupCreation').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            document.getElementById('submitButton').textContent = 'Create Group';
         }
 
         function addMemberField() {
@@ -198,8 +196,8 @@
             const div = document.createElement('div');
             div.className = 'member-input';
             div.innerHTML = `
-                <input type="text" class="member-name" placeholder="Member Name (e.g., Bob)" required>
-                <input type="text" class="member-address" placeholder="e.g., 0x742d..." required>
+                <input type="text" class="member-name" placeholder="Member Name (e.g., Bob)">
+                <input type="text" class="member-address" placeholder="e.g., 0x742d...">
                 <button type="button" class="remove-member" onclick="removeMember(this)">Remove</button>
             `;
             memberInputs.appendChild(div);
@@ -224,67 +222,6 @@
             }
         }
 
-        document.getElementById('groupForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            if (!window.web3() || !window.getContract() || !window.getAccount()) {
-                alert('Please connect MetaMask first.');
-                return;
-            }
-            const groupName = document.getElementById('groupName').value;
-            const memberInputs = document.getElementsByClassName('member-address');
-            const groupMessage = document.getElementById('groupMessage');
-            try {
-                const members = Array.from(memberInputs)
-                    .map(input => input.value.trim().toLowerCase())
-                    .filter(addr => addr.match(/^0x[a-f0-9]{40}$/));
-                console.log('Submitting members:', members);
-                if (members.length < 2) {
-                    groupMessage.textContent = 'Please include at least two valid Ethereum addresses (including yours).';
-                    return;
-                }
-                const userAddress = window.getAccount().toLowerCase();
-                if (!members.includes(userAddress)) {
-                    groupMessage.textContent = 'Your address is missing from the member list.';
-                    return;
-                }
-                const tx = await window.getContract().methods.createGroup(groupName, members).send({
-                    from: window.getAccount(),
-                    value: '0',
-                    type: '0x0'
-                });
-                groupMessage.textContent = `Group created! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`;
-                this.reset();
-                document.getElementById('memberInputs').innerHTML = `
-                    <div class="member-input">
-                        <input type="text" class="member-name" value="Me" readonly>
-                        <input type="text" class="member-address" id="userAddress" readonly>
-                        <span class="member-label">Your Address</span>
-                    </div>
-                    <div class="member-input">
-                        <input type="text" class="member-name" placeholder="Member Name (e.g., Bob)" required>
-                        <input type="text" class="member-address" placeholder="e.g., 0x742d..." required>
-                        <button type="button" class="remove-member" onclick="removeMember(this)">Remove</button>
-                    </div>
-                `;
-                document.getElementById('groupCreation').style.display = 'none';
-                document.getElementById('createGroupBtn').style.display = 'block';
-                document.getElementById('groupId').value = '';
-                await populateGroupDropdown();
-            } catch (error) {
-                console.error('Group creation error:', error);
-                groupMessage.textContent = 'Error: ' + (error.message.includes('Eip1559NotSupportedError') ? 'Network does not support EIP-1559. Try again.' : error.message.includes('revert') ? 'Invalid input or contract revert. Check addresses and try again.' : error.message);
-            }
-        });
-
-        const splitSelect = document.getElementById('split');
-        const customInput = document.getElementById('customShares');
-        const customLabel = document.getElementById('customLabel');
-        splitSelect.addEventListener('change', function() {
-            const show = this.value === 'custom';
-            customInput.style.display = show ? 'block' : 'none';
-            customLabel.style.display = show ? 'block' : 'none';
-        });
-
         document.getElementById('expenseForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             if (!window.web3() || !window.getContract() || !window.getAccount()) {
@@ -293,8 +230,53 @@
             }
             const groupId = document.getElementById('groupId').value;
             const expenseMessage = document.getElementById('expenseMessage');
-            if (!groupId || groupId === 'create') {
-                expenseMessage.textContent = 'Please select an existing group or create a new one first.';
+            const submitButton = document.getElementById('submitButton');
+            const groupCreationDiv = document.getElementById('groupCreation');
+            const createGroupBtn = document.getElementById('createGroupBtn');
+            if (groupId === 'create') {
+                const groupName = document.getElementById('groupName').value;
+                const memberInputs = document.getElementsByClassName('member-address');
+                if (!groupName) {
+                    expenseMessage.textContent = 'Please enter a group name.';
+                    return;
+                }
+                try {
+                    const members = Array.from(memberInputs)
+                        .map(input => input.value.trim().toLowerCase())
+                        .filter(addr => addr.match(/^0x[a-f0-9]{40}$/) || addr === window.getAccount().toLowerCase());
+                    console.log('Submitting members:', members);
+                    if (members.length < 2) {
+                        expenseMessage.textContent = 'Please include at least two valid Ethereum addresses (including yours).';
+                        return;
+                    }
+                    const userAddress = window.getAccount().toLowerCase();
+                    if (!members.includes(userAddress)) {
+                        expenseMessage.textContent = 'Your address is missing from the member list.';
+                        return;
+                    }
+                    const tx = await window.getContract().methods.createGroup(groupName, members).send({
+                        from: window.getAccount(),
+                        value: '0',
+                        type: '0x0'
+                    });
+                    expenseMessage.textContent = `Group created! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`;
+                    groupCreationDiv.style.display = 'none';
+                    createGroupBtn.style.display = 'block';
+                    submitButton.textContent = 'Add Expense';
+                    this.reset();
+                    await populateGroupDropdown();
+                    // Auto-select the new group (assumes groupId is groupCount - 1)
+                    const groupCount = await window.getContract().methods.groupCount().call();
+                    document.getElementById('groupId').value = parseInt(groupCount) - 1;
+                    return; // Wait for user to submit expense
+                } catch (error) {
+                    console.error('Group creation error:', error);
+                    expenseMessage.textContent = 'Error: ' + (error.message.includes('Eip1559NotSupportedError') ? 'Network does not support EIP-1559. Try again.' : error.message.includes('revert') ? 'Invalid input or contract revert. Check addresses and try again.' : error.message);
+                    return;
+                }
+            }
+            if (!groupId) {
+                expenseMessage.textContent = 'Please select a group.';
                 return;
             }
             const description = document.getElementById('description').value;
@@ -334,13 +316,22 @@
                 });
                 expenseMessage.textContent = `Expense added! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`;
                 this.reset();
-                customInput.style.display = 'none';
-                customLabel.style.display = 'none';
+                document.getElementById('customShares').style.display = 'none';
+                document.getElementById('customLabel').style.display = 'none';
                 await populateGroupDropdown();
             } catch (error) {
                 console.error('Expense error:', error);
                 expenseMessage.textContent = 'Error: ' + (error.message.includes('Eip1559NotSupportedError') ? 'Network does not support EIP-1559. Try again.' : error.message.includes('revert') ? 'Invalid input or contract revert. Check group ID and try again.' : error.message);
             }
+        });
+
+        const splitSelect = document.getElementById('split');
+        const customInput = document.getElementById('customShares');
+        const customLabel = document.getElementById('customLabel');
+        splitSelect.addEventListener('change', function() {
+            const show = this.value === 'custom';
+            customInput.style.display = show ? 'block' : 'none';
+            customLabel.style.display = show ? 'block' : 'none';
         });
     </script>
 </body>
