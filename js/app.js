@@ -254,8 +254,7 @@ function truncateAddress(address) {
 
 function getMemberName(address) {
     const memberNames = JSON.parse(localStorage.getItem('memberNames') || '{}');
-    return memberNames[address?.toLowerCase()] || truncate Kedro
-truncateAddress(address);
+    return memberNames[address?.toLowerCase()] || truncateAddress(address);
 }
 
 function createBlockie(address, size = 32, initial = '') {
@@ -373,17 +372,18 @@ async function populateDashboard() {
         console.log('Total group count from contract:', groupCount);
         const groupIds = new Set();
         let totalAttempts = 0;
-        const maxTotalAttempts = 150; // Cap total retries to prevent infinite loop
+        const maxTotalAttempts = 50; // Reduced to prevent RPC overload
         for (let i = 0; i < Math.min(groupCount, 50); i++) {
             let attempts = 3;
             while (attempts > 0 && totalAttempts < maxTotalAttempts) {
                 totalAttempts++;
                 try {
                     const groupId = await getContract().methods.userGroups(userAddress, i).call();
-                    console.log(`userGroups[${i}]:`, groupId);
-                    if (groupId && parseInt(groupId) > 0 && groupId !== "0") {
+                    console.log(`Raw userGroups[${i}]:`, groupId);
+                    if (groupId && parseInt(groupId) > 0 && groupId !== "0" && groupId !== "") {
                         groupIds.add(groupId);
-                        break; // Move to next index after success
+                        console.log(`Added groupId ${groupId} at index ${i}`);
+                        break; // Move to next index
                     } else {
                         console.log(`Stopping userGroups scan at index ${i}: invalid groupId ${groupId}`);
                         break;
@@ -402,6 +402,7 @@ async function populateDashboard() {
                 console.log(`Exiting userGroups loop at index ${i}: ${attempts === 0 ? 'failed attempts' : 'max total attempts reached'}`);
                 break;
             }
+            await new Promise(resolve => setTimeout(resolve, 500)); // Throttle between iterations
         }
         console.log('Group IDs from userGroups:', Array.from(groupIds));
         if (groupIds.size === 0) {
@@ -416,6 +417,7 @@ async function populateDashboard() {
                 } catch (error) {
                     console.error(`Error fetching group ${i} in fallback scan:`, error);
                 }
+                await new Promise(resolve => setTimeout(resolve, 500)); // Throttle
             }
             console.log('Group IDs from fallback scan:', Array.from(groupIds));
         }
@@ -630,17 +632,18 @@ async function populateGroupDropdown() {
         console.log('Total group count from contract:', groupCount);
         const groupIds = new Set();
         let totalAttempts = 0;
-        const maxTotalAttempts = 150; // Cap total retries to prevent infinite loop
+        const maxTotalAttempts = 50; // Reduced to prevent RPC overload
         for (let i = 0; i < Math.min(groupCount, 50); i++) {
             let attempts = 3;
             while (attempts > 0 && totalAttempts < maxTotalAttempts) {
                 totalAttempts++;
                 try {
                     const groupId = await getContract().methods.userGroups(userAddress, i).call();
-                    console.log(`userGroups[${i}]:`, groupId);
-                    if (groupId && parseInt(groupId) > 0 && groupId !== "0") {
+                    console.log(`Raw userGroups[${i}]:`, groupId);
+                    if (groupId && parseInt(groupId) > 0 && groupId !== "0" && groupId !== "") {
                         groupIds.add(groupId);
-                        break; // Move to next index after success
+                        console.log(`Added groupId ${groupId} at index ${i}`);
+                        break; // Move to next index
                     } else {
                         console.log(`Stopping userGroups scan at index ${i}: invalid groupId ${groupId}`);
                         break;
@@ -659,6 +662,7 @@ async function populateGroupDropdown() {
                 console.log(`Exiting userGroups loop at index ${i}: ${attempts === 0 ? 'failed attempts' : 'max total attempts reached'}`);
                 break;
             }
+            await new Promise(resolve => setTimeout(resolve, 500)); // Throttle between iterations
         }
         console.log('Group IDs from userGroups:', Array.from(groupIds));
         if (groupIds.size === 0) {
@@ -673,6 +677,7 @@ async function populateGroupDropdown() {
                 } catch (error) {
                     console.error(`Error fetching group ${i} in fallback scan:`, error);
                 }
+                await new Promise(resolve => setTimeout(resolve, 500)); // Throttle
             }
             console.log('Group IDs from fallback scan:', Array.from(groupIds));
         }
@@ -810,7 +815,7 @@ async function handleExpenseFormSubmit(e) {
                 const nameInput = input.querySelector('.member-name');
                 const address = addressInput?.value?.trim().toLowerCase() || '';
                 const name = nameInput?.value?.trim() || '';
-                if (address && web3.utils.isAddress(address) || address === userAddress) {
+                if (address && (web3.utils.isAddress(address) || address === userAddress)) {
                     members.push(address);
                     if (name) newMemberNames[address] = name;
                 }
