@@ -37,7 +37,7 @@
                         </div>
                     </div>
                     <button type="button" onclick="addMemberField()">Add Member</button>
-                    <button type="submit">Create Group</button>
+                    <button type="submit">Submit Group</button>
                 </form>
                 <p id="groupMessage"></p>
             </div>
@@ -100,7 +100,7 @@
             }
             try {
                 const userAddress = window.getAccount();
-                // Set user's address and name in readonly fields
+                // Set user's address in readonly field
                 const userAddressInput = document.getElementById('userAddress');
                 if (userAddressInput) {
                     userAddressInput.value = userAddress;
@@ -181,7 +181,7 @@
 
         function updateRemoveButtons() {
             const memberInputs = document.getElementById('memberInputs');
-            const removeButtons = memberInputs.getElementsByClassName('remove-member');
+            const removeButtons = document.getElementsByClassName('remove-member');
             for (let btn of removeButtons) {
                 btn.style.display = memberInputs.children.length > 1 ? 'inline-block' : 'none';
             }
@@ -210,7 +210,11 @@
                     groupMessage.textContent = 'Your address is missing from the member list.';
                     return;
                 }
-                const tx = await window.getContract().methods.createGroup(groupName, members).send({ from: window.getAccount(), value: '0' });
+                const tx = await window.getContract().methods.createGroup(groupName, members).send({
+                    from: window.getAccount(),
+                    value: '0',
+                    type: '0x0' // Use legacy transaction
+                });
                 groupMessage.textContent = `Group created! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`;
                 this.reset();
                 document.getElementById('memberInputs').innerHTML = `
@@ -224,7 +228,7 @@
                 await populateGroupDropdown();
             } catch (error) {
                 console.error('Group creation error:', error);
-                groupMessage.textContent = 'Error: ' + (error.message.includes('revert') ? 'Invalid input or contract revert. Check addresses and try again.' : error.message);
+                groupMessage.textContent = 'Error: ' + (error.message.includes('Eip1559NotSupportedError') ? 'Network does not support EIP-1559. Try again.' : error.message.includes('revert') ? 'Invalid input or contract revert. Check addresses and try again.' : error.message);
             }
         });
 
@@ -278,14 +282,18 @@
                 }
             }
             try {
-                const tx = await window.getContract().methods.addExpense(groupId, description, amount, splitType, customShares).send({ from: window.getAccount(), value: '0' });
+                const tx = await window.getContract().methods.addExpense(groupId, description, amount, splitType, customShares).send({
+                    from: window.getAccount(),
+                    value: '0',
+                    type: '0x0' // Use legacy transaction
+                });
                 alert(`Expense added! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`);
                 this.reset();
                 customInput.style.display = 'none';
                 customLabel.style.display = 'none';
                 await populateGroupDropdown();
             } catch (error) {
-                alert('Error: ' + error.message + '\nEnsure you are a group member and have enough SHM for gas.');
+                alert('Error: ' + (error.message.includes('Eip1559NotSupportedError') ? 'Network does not support EIP-1559. Try again.' : error.message.includes('revert') ? 'Invalid input or contract revert. Check group ID and try again.' : error.message));
             }
         });
     </script>
