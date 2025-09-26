@@ -35,18 +35,18 @@
                             <input type="text" class="member-address" id="userAddress" readonly>
                             <span class="member-label">Your Address</span>
                         </div>
+                        <div class="member-input">
+                            <input type="text" class="member-name" placeholder="Member Name (e.g., Bob)" required>
+                            <input type="text" class="member-address" placeholder="e.g., 0x742d..." required>
+                            <button type="button" class="remove-member" onclick="removeMember(this)">Remove</button>
+                        </div>
                     </div>
                     <button type="button" onclick="addMemberField()">Add Member</button>
-                    <button type="submit">Submit Group</button>
+                    <button type="submit" class="submit-group">Submit Group</button>
                 </form>
                 <p id="groupMessage"></p>
             </div>
             <form id="expenseForm">
-                <label for="groupId">Group:</label>
-                <select id="groupId" required>
-                    <option value="" disabled selected>Select a group</option>
-                </select>
-                <button type="button" id="createGroupBtn" onclick="showGroupCreation()">Create Group</button>
                 <label for="description">Description:</label>
                 <input type="text" id="description" placeholder="e.g., Dinner at Restaurant" required>
                 <label for="amount">Amount (SHM):</label>
@@ -58,6 +58,11 @@
                 </select>
                 <label for="customShares" id="customLabel" style="display:none;">Custom Shares (%, comma-separated):</label>
                 <input type="text" id="customShares" placeholder="e.g., 40,30,30" style="display:none;">
+                <label for="groupId">Group:</label>
+                <select id="groupId" required>
+                    <option value="" disabled selected>Select a group</option>
+                </select>
+                <button type="button" id="createGroupBtn" onclick="showGroupCreation()">Create Group</button>
                 <button type="submit">Add Expense</button>
             </form>
         </section>
@@ -118,37 +123,47 @@
                         break;
                     }
                 }
+                groupSelect.innerHTML = '<option value="" disabled selected>Select a group</option>';
                 if (groupIds.length === 0) {
-                    groupSelect.innerHTML = '<option value="" disabled selected>No groups found</option>';
+                    groupSelect.innerHTML += '<option value="create">Create a new group</option>';
                     groupCreationDiv.style.display = 'block';
                     createGroupBtn.style.display = 'block';
-                    return;
-                }
-                groupSelect.innerHTML = '<option value="" disabled selected>Select a group</option>';
-                groupCreationDiv.style.display = 'none';
-                createGroupBtn.style.display = 'block';
-                for (let groupId of groupIds) {
-                    try {
-                        const [name] = await window.getContract().methods.getGroup(groupId).call();
-                        const option = document.createElement('option');
-                        option.value = groupId;
-                        option.textContent = `${name} (ID: ${groupId})`;
-                        groupSelect.appendChild(option);
-                    } catch (error) {
-                        console.error(`Error fetching group ${groupId}:`, error);
+                } else {
+                    groupCreationDiv.style.display = 'none';
+                    createGroupBtn.style.display = 'block';
+                    for (let groupId of groupIds) {
+                        try {
+                            const [name] = await window.getContract().methods.getGroup(groupId).call();
+                            const option = document.createElement('option');
+                            option.value = groupId;
+                            option.textContent = `${name} (ID: ${groupId})`;
+                            groupSelect.appendChild(option);
+                        } catch (error) {
+                            console.error(`Error fetching group ${groupId}:`, error);
+                        }
                     }
+                    const createOption = document.createElement('option');
+                    createOption.value = 'create';
+                    createOption.textContent = 'Create a new group';
+                    groupSelect.appendChild(createOption);
                 }
             } catch (error) {
                 console.error('Error fetching groups:', error);
-                groupSelect.innerHTML = '<option value="" disabled selected>Error loading groups</option>';
+                groupSelect.innerHTML = '<option value="" disabled selected>Error loading groups</option><option value="create">Create a new group</option>';
                 groupCreationDiv.style.display = 'block';
                 createGroupBtn.style.display = 'block';
             }
+            // Listen for group selection changes
+            groupSelect.addEventListener('change', function() {
+                groupCreationDiv.style.display = this.value === 'create' ? 'block' : 'none';
+                createGroupBtn.style.display = this.value === 'create' ? 'none' : 'block';
+            });
         }
 
         function showGroupCreation() {
             document.getElementById('groupCreation').style.display = 'block';
             document.getElementById('createGroupBtn').style.display = 'none';
+            document.getElementById('groupId').value = 'create';
         }
 
         function addMemberField() {
@@ -171,7 +186,7 @@
 
         function removeMember(button) {
             const memberInputs = document.getElementById('memberInputs');
-            if (memberInputs.children.length > 1) {
+            if (memberInputs.children.length > 2) { // Allow removal only if more than user + one member
                 button.parentElement.remove();
                 updateRemoveButtons();
             } else {
@@ -183,7 +198,7 @@
             const memberInputs = document.getElementById('memberInputs');
             const removeButtons = document.getElementsByClassName('remove-member');
             for (let btn of removeButtons) {
-                btn.style.display = memberInputs.children.length > 1 ? 'inline-block' : 'none';
+                btn.style.display = memberInputs.children.length > 2 ? 'inline-block' : 'none';
             }
         }
 
@@ -223,6 +238,11 @@
                         <input type="text" class="member-address" id="userAddress" readonly>
                         <span class="member-label">Your Address</span>
                     </div>
+                    <div class="member-input">
+                        <input type="text" class="member-name" placeholder="Member Name (e.g., Bob)" required>
+                        <input type="text" class="member-address" placeholder="e.g., 0x742d..." required>
+                        <button type="button" class="remove-member" onclick="removeMember(this)">Remove</button>
+                    </div>
                 `;
                 document.getElementById('groupCreation').style.display = 'none';
                 await populateGroupDropdown();
@@ -248,8 +268,8 @@
                 return;
             }
             const groupId = document.getElementById('groupId').value;
-            if (!groupId) {
-                alert('Please select a group.');
+            if (!groupId || groupId === 'create') {
+                alert('Please select an existing group or create a new one first.');
                 return;
             }
             const description = document.getElementById('description').value;
