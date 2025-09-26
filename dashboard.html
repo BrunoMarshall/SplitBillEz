@@ -8,7 +8,7 @@
     <link rel="icon" href="images/splitbillez_favicon.png">
     <script src="https://cdn.jsdelivr.net/npm/web3@4.16.0/dist/web3.min.js"></script>
 </head>
-<body onload="initWeb3().then(populateDashboard)">
+<body onload="initWeb3().then(populateDashboard).catch(err => document.getElementById('dashboardContent').innerHTML = '<p>Error initializing Web3: ' + err.message + '. Please refresh and reconnect MetaMask.</p>')">
     <header>
         <div class="header-container">
             <img src="images/splitbillez_logo.png" alt="SplitBillEz Logo" class="logo">
@@ -85,7 +85,6 @@
                 return canvas.toDataURL();
             } catch (error) {
                 console.error('Error generating group avatar for groupId ' + groupId + ':', error);
-                // Fallback: Gray square
                 const canvas = document.createElement('canvas');
                 canvas.width = 32;
                 canvas.height = 32;
@@ -132,13 +131,13 @@
         async function populateDashboard() {
             const dashboardContent = document.getElementById('dashboardContent');
             dashboardContent.innerHTML = '<p>Loading groups...</p>';
-            if (!window.getContract() || !window.getAccount()) {
-                dashboardContent.innerHTML = '<p>Please connect MetaMask to view your groups.</p>';
+            if (!window.web3 || !window.web3.utils) {
+                console.error('Web3.js or web3.utils is not initialized');
+                dashboardContent.innerHTML = '<p>Error: Web3.js not properly initialized. Please refresh and reconnect MetaMask.</p>';
                 return;
             }
-            if (!window.web3 || !window.web3.utils) {
-                console.error('Web3.utils is not initialized');
-                dashboardContent.innerHTML = '<p>Error: Web3.js not properly initialized. Please refresh and reconnect MetaMask.</p>';
+            if (!window.getContract() || !window.getAccount()) {
+                dashboardContent.innerHTML = '<p>Please connect MetaMask to view your groups.</p>';
                 return;
             }
             try {
@@ -307,7 +306,7 @@
                 }
             } catch (error) {
                 console.error('Error populating dashboard:', error);
-                dashboardContent.innerHTML = '<p>Error loading groups. Please try again.</p>';
+                dashboardContent.innerHTML = '<p>Error loading groups: ' + error.message + '. Please try again.</p>';
             }
         }
     </script>
