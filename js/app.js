@@ -427,6 +427,11 @@ async function handleMetaMaskToggle() {
         await disconnectWallet();
     } else {
         await initWeb3();
+        if (document.getElementById('groupId')) {
+            await populateGroupDropdown();
+        } else if (document.getElementById('dashboardContent')) {
+            await populateDashboard();
+        }
     }
 }
 
@@ -510,36 +515,35 @@ function createBlockie(address, size = 32, initial = '') {
 async function checkMetaMaskConnection() {
     console.log('Checking MetaMask connection on page load...');
     try {
-        if (window.ethereum) {
-            console.log('MetaMask provider detected');
-            if (!web3 || !web3.utils) {
-                console.log('Initializing Web3...');
-                await initWeb3();
-            }
-            const account = await getAccount();
-            console.log('MetaMask connected on load:', account);
-            if (account) {
-                if (document.getElementById('userAddress')) {
-                    document.getElementById('userAddress').value = account;
-                    await fetchShmPrice();
-                    await populateGroupDropdown();
-                } else if (document.getElementById('dashboardContent')) {
-                    await populateDashboard();
-                }
-            } else {
-                console.log('No account connected, waiting for user to connect MetaMask');
-                if (document.getElementById('dashboardContent')) {
-                    document.getElementById('dashboardContent').innerHTML = 'Please connect MetaMask to view your groups.';
-                } else if (document.getElementById('expenseMessage')) {
-                    document.getElementById('expenseMessage').textContent = 'Please connect MetaMask to load groups.';
-                }
-            }
-        } else {
+        if (!window.ethereum) {
             console.log('MetaMask not detected');
             if (document.getElementById('dashboardContent')) {
                 document.getElementById('dashboardContent').innerHTML = 'MetaMask not detected. Please install MetaMask and refresh.';
             } else if (document.getElementById('expenseMessage')) {
                 document.getElementById('expenseMessage').textContent = 'MetaMask not detected. Please install MetaMask and refresh.';
+            }
+            return;
+        }
+        if (!web3 || !web3.utils) {
+            console.log('Initializing Web3...');
+            await initWeb3();
+        }
+        const account = await getAccount();
+        console.log('MetaMask connected on load:', account);
+        if (account) {
+            if (document.getElementById('userAddress')) {
+                document.getElementById('userAddress').value = account;
+                await fetchShmPrice();
+                await populateGroupDropdown();
+            } else if (document.getElementById('dashboardContent')) {
+                await populateDashboard();
+            }
+        } else {
+            console.log('No account connected, waiting for user to connect MetaMask');
+            if (document.getElementById('dashboardContent')) {
+                document.getElementById('dashboardContent').innerHTML = 'Please connect MetaMask to view your groups.';
+            } else if (document.getElementById('expenseMessage')) {
+                document.getElementById('expenseMessage').textContent = 'Please connect MetaMask to load groups.';
             }
         }
     } catch (error) {
@@ -913,7 +917,7 @@ async function handleExpenseFormSubmit(e) {
             Array.from(memberInputs).forEach(input => {
                 const address = input.querySelector('.member-address').value.trim().toLowerCase();
                 const name = input.querySelector('.member-name').value.trim();
-                if (web3.utils.isAddress(address) || address === userAddress) {
+                if (address && (web3.utils.isAddress(address) || address === userAddress)) {
                     members.push(address);
                     if (name) newMemberNames[address] = name;
                 }
