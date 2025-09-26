@@ -7,8 +7,9 @@
     <link rel="stylesheet" href="css/style.css">
     <link rel="icon" href="images/splitbillez_favicon.png">
     <script src="https://cdn.jsdelivr.net/npm/web3@4.16.0/dist/web3.min.js"></script>
+    <script src="js/app.js"></script>
 </head>
-<body onload="initWeb3().then(populateDashboard).catch(err => document.getElementById('dashboardContent').innerHTML = '<p>Error initializing Web3: ' + err.message + '. Please refresh and reconnect MetaMask.</p>')">
+<body>
     <header>
         <div class="header-container">
             <img src="images/splitbillez_logo.png" alt="SplitBillEz Logo" class="logo">
@@ -17,14 +18,14 @@
                 <a href="dashboard.html">Dashboard</a>
                 <a href="add-expense.html">Add Expense</a>
             </nav>
-            <button class="metamask-button" onclick="handleMetaMaskToggle()">Connect with MetaMask</button>
+            <button class="metamask-button" onclick="handleMetaMaskToggle().then(() => populateDashboard())">Connect with MetaMask</button>
         </div>
     </header>
     <main>
         <section>
             <h2>Your Groups</h2>
             <div id="dashboardContent">
-                <p>Loading groups...</p>
+                <p>Connect MetaMask to load groups...</p>
             </div>
         </section>
     </main>
@@ -51,7 +52,6 @@
             </a>
         </div>
     </footer>
-    <script src="js/app.js"></script>
     <script>
         // Manual Blockies implementation
         function createGroupAvatar(groupId) {
@@ -131,17 +131,32 @@
         async function populateDashboard() {
             const dashboardContent = document.getElementById('dashboardContent');
             dashboardContent.innerHTML = '<p>Loading groups...</p>';
+
             if (!window.web3 || !window.web3.utils) {
                 console.error('Web3.js or web3.utils is not initialized');
+                try {
+                    await initWeb3();
+                } catch (error) {
+                    console.error('Web3 reinitialization failed:', error);
+                    dashboardContent.innerHTML = '<p>Error: Web3.js failed to initialize. Please refresh and reconnect MetaMask.</p>';
+                    return;
+                }
+            }
+
+            if (!window.web3 || !window.web3.utils) {
+                console.error('Web3.js or web3.utils still not initialized after retry');
                 dashboardContent.innerHTML = '<p>Error: Web3.js not properly initialized. Please refresh and reconnect MetaMask.</p>';
                 return;
             }
+
             if (!window.getContract() || !window.getAccount()) {
+                console.error('Contract or account not initialized');
                 dashboardContent.innerHTML = '<p>Please connect MetaMask to view your groups.</p>';
                 return;
             }
+
             try {
-                const userAddress = window.getAccount();
+                const userAddress = await window.getAccount();
                 console.log('Fetching groups for dashboard:', userAddress);
                 const groupIds = [];
                 for (let i = 0; i < 50; i++) {
@@ -169,6 +184,46 @@
                     return;
                 }
                 dashboardContent.innerHTML = '';
+
+                // Fetch ExpenseAdded events
+                let expenses = [];
+                try {
+                    const events = await window.getContract().getPastEvents('ExpenseAdded', {
+                        fromBlock: 0,
+                        toBlock: 'latest'
+                    });
+                    console.log('ExpenseAdded events:', events);
+                    expenses = events.map(event => ({
+                        id: event.returnValues.expenseId,
+                        groupId: String(event.returnValues.groupId).trim(),
+                        description: event.returnValues.description || 'No description',
+                        amount: event.returnValues.amount ? window.web3.utils.fromWei(event.returnValues.amount, 'ether') : '0',
+                        // Payer and splitType not in event, fetch from expenses mapping
+                        payer: null,
+                        splitType: null,
+                        timestamp: null
+                    }));
+
+                    // Fetch additional expense details
+                    for (let expense of expenses) {
+                        try {
+                            const expenseData = await window.getContract().methods.expenses(expense.id).call();
+                            console.log(`Expense ${expense.id} raw data:`, expenseData);
+                            expense.payer = expenseData.payer || 'Unknown';
+                            expense.splitType = expenseData.splitType || 'Unknown';
+                            expense.timestamp = expenseData.timestamp && parseInt(expenseData.timestamp) > 0
+                                ? new Date(parseInt(expenseData.timestamp) * 1000).toLocaleString()
+                                : 'N/A';
+                        } catch (error) {
+                            console.error(`Error fetching expense ${expense.id} details:`, error);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error fetching ExpenseAdded events:', error);
+                    expenses = [];
+                }
+                console.log('Processed expenses:', expenses);
+
                 for (let groupId of groupIds) {
                     try {
                         const result = await window.getContract().methods.getGroup(groupId).call();
@@ -190,48 +245,11 @@
                             balances = [];
                             balMembers = [];
                         }
-                        let expenseCount = 0;
-                        try {
-                            expenseCount = await window.getContract().methods.expenseCount().call();
-                            console.log(`Expense count: ${expenseCount}`);
-                        } catch (error) {
-                            console.error('Error fetching expenseCount:', error);
-                            expenseCount = 0;
-                        }
-                        const expenses = [];
-                        for (let i = 0; i < expenseCount; i++) {
-                            let attempts = 3;
-                            while (attempts > 0) {
-                                try {
-                                    const expense = await window.getContract().methods.expenses(i).call();
-                                    console.log(`Expense ${i} raw data:`, expense);
-                                    const expenseGroupId = expense.groupId !== undefined ? String(expense.groupId).trim() : 'undefined';
-                                    const currentGroupId = String(groupId).trim();
-                                    console.log(`Comparing expense.groupId (${expenseGroupId}) with groupId (${currentGroupId})`);
-                                    if (expenseGroupId === currentGroupId) {
-                                        expenses.push({
-                                            id: i,
-                                            description: expense.description || 'No description',
-                                            amount: expense.amount ? window.web3.utils.fromWei(expense.amount, 'ether') : '0',
-                                            payer: expense.payer || 'Unknown',
-                                            splitType: expense.splitType || 'Unknown',
-                                            timestamp: expense.timestamp && parseInt(expense.timestamp) > 0
-                                                ? new Date(parseInt(expense.timestamp) * 1000).toLocaleString()
-                                                : 'N/A'
-                                        });
-                                    } else {
-                                        console.warn(`Skipping expense ${i}: groupId ${expenseGroupId} does not match ${currentGroupId}`);
-                                    }
-                                    break;
-                                } catch (error) {
-                                    console.error(`Error fetching expense ${i}, attempt ${4 - attempts}:`, error);
-                                    attempts--;
-                                    if (attempts === 0) break;
-                                    await new Promise(resolve => setTimeout(resolve, 1000));
-                                }
-                            }
-                        }
-                        console.log(`Group ${groupId} expenses:`, expenses);
+
+                        // Filter expenses for this group
+                        const groupExpenses = expenses.filter(exp => exp.groupId === String(groupId).trim());
+                        console.log(`Group ${groupId} expenses:`, groupExpenses);
+
                         const groupAvatar = createGroupAvatar(groupId);
                         const groupDiv = document.createElement('div');
                         groupDiv.className = 'group';
@@ -241,11 +259,11 @@
                                 <span class="member"><img src="${createInitialsAvatar(getMemberName(addr))}" class="user-avatar" alt="User Avatar"> ${getMemberName(addr)}</span>
                             `).join(', ')}</p>
                             <h4>Expenses:</h4>
-                            ${expenses.length > 0 ? expenses.map(exp => `
+                            ${groupExpenses.length > 0 ? groupExpenses.map(exp => `
                                 <p>Expense ${exp.id}: ${exp.description} - ${exp.amount} SHM 
                                 (Payer: <span class="member"><img src="${createInitialsAvatar(getMemberName(exp.payer))}" class="user-avatar" alt="User Avatar"> ${getMemberName(exp.payer)}</span>, 
-                                Split: ${exp.splitType}, Date: ${exp.timestamp})</p>
-                            `).join('') : '<p>No expenses found. ${expenseCount > 0 ? "Possible contract issue: groupId undefined." : ""}</p>'}
+                                Split: ${exp.splitType || 'Unknown'}, Date: ${exp.timestamp || 'N/A'})</p>
+                            `).join('') : '<p>No expenses found. ${expenses.length > 0 ? "Possible contract issue: check ExpenseAdded events." : ""}</p>'}
                             <h4>Balances:</h4>
                             ${balMembers.length > 0 ? balMembers.map((addr, i) => `
                                 <p><span class="member"><img src="${createInitialsAvatar(getMemberName(addr))}" class="user-avatar" alt="User Avatar"> ${getMemberName(addr)}</span>: 
@@ -288,7 +306,7 @@
                             }
                             try {
                                 const tx = await window.getContract().methods.settleDebt(settleGroupId, toAddress, amount).send({
-                                    from: window.getAccount(),
+                                    from: await window.getAccount(),
                                     value: '0',
                                     type: '0x0'
                                 });
