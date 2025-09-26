@@ -520,288 +520,264 @@ async function populateDashboard() {
         dashboardContent.innerHTML = '<p>Please connect MetaMask to view your groups.</p>';
         return;
     }
-
-    // Polling state
-    let pollingInterval = null;
-    const POLL_INTERVAL = 20000; // 20 seconds
-
-    async function fetchAndRenderGroups() {
-        try {
-            const userAddress = await getAccount();
-            console.log('Fetching groups for dashboard, user:', userAddress);
-            const groupCount = parseInt(await getContract().methods.groupCount().call()) || 0;
-            console.log('Total group count from contract:', groupCount);
-            const groupIds = new Set();
-            let totalAttempts = 0;
-            const maxTotalAttempts = 50;
-            for (let i = 0; i < Math.min(groupCount, 50); i++) {
-                let attempts = 3;
-                let groupId = null;
-                while (attempts > 0 && totalAttempts < maxTotalAttempts) {
-                    totalAttempts++;
-                    try {
-                        groupId = await getContract().methods.userGroups(userAddress, i).call();
-                        console.log(`Raw userGroups[${i}]:`, groupId);
-                        if (groupId && parseInt(groupId) > 0 && groupId !== "0" && groupId !== "") {
-                            groupIds.add(groupId);
-                            console.log(`Added groupId ${groupId} at index ${i}`);
-                            break;
-                        } else {
-                            console.log(`Skipping userGroups[${i}]: invalid groupId ${groupId}`);
-                            break;
-                        }
-                    } catch (error) {
-                        console.error(`Error fetching userGroups[${i}], attempt ${4 - attempts}:`, error.message, error);
-                        attempts--;
-                        if (error.message.includes('execution reverted')) {
-                            console.log(`userGroups[${i}] reverted, likely invalid index or empty slot`);
-                            break;
-                        }
-                        if (attempts === 0) {
-                            console.log(`Stopping userGroups scan at index ${i} after failed attempts`);
-                            break;
-                        }
-                        await new Promise(resolve => setTimeout(resolve, 1000));
+    try {
+        const userAddress = await getAccount();
+        console.log('Fetching groups for dashboard, user:', userAddress);
+        const groupCount = parseInt(await getContract().methods.groupCount().call()) || 0;
+        console.log('Total group count from contract:', groupCount);
+        const groupIds = new Set();
+        let totalAttempts = 0;
+        const maxTotalAttempts = 50;
+        for (let i = 0; i < Math.min(groupCount, 50); i++) {
+            let attempts = 3;
+            let groupId = null;
+            while (attempts > 0 && totalAttempts < maxTotalAttempts) {
+                totalAttempts++;
+                try {
+                    groupId = await getContract().methods.userGroups(userAddress, i).call();
+                    console.log(`Raw userGroups[${i}]:`, groupId);
+                    if (groupId && parseInt(groupId) > 0 && groupId !== "0" && groupId !== "") {
+                        groupIds.add(groupId);
+                        console.log(`Added groupId ${groupId} at index ${i}`);
+                        break;
+                    } else {
+                        console.log(`Skipping userGroups[${i}]: invalid groupId ${groupId}`);
+                        break;
                     }
+                } catch (error) {
+                    console.error(`Error fetching userGroups[${i}], attempt ${4 - attempts}:`, error.message, error);
+                    attempts--;
+                    if (error.message.includes('execution reverted')) {
+                        console.log(`userGroups[${i}] reverted, likely invalid index or empty slot`);
+                        break;
+                    }
+                    if (attempts === 0) {
+                        console.log(`Stopping userGroups scan at index ${i} after failed attempts`);
+                        break;
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                 }
-                if (attempts === 0 || totalAttempts >= maxTotalAttempts || groupId === null) {
-                    console.log(`Exiting userGroups loop at index ${i}: ${attempts === 0 ? 'failed attempts' : groupId === null ? 'revert or invalid groupId' : 'max total attempts reached'}`);
-                    break;
+            }
+            if (attempts === 0 || totalAttempts >= maxTotalAttempts || groupId === null) {
+                console.log(`Exiting userGroups loop at index ${i}: ${attempts === 0 ? 'failed attempts' : groupId === null ? 'revert or invalid groupId' : 'max total attempts reached'}`);
+                break;
+            }
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        console.log('Group IDs from userGroups:', Array.from(groupIds));
+        if (groupIds.size === 0) {
+            console.log('No groups found in userGroups, attempting fallback group scan');
+            for (let i = 1; i <= groupCount && i <= 50; i++) {
+                try {
+                    const result = await getContract().methods.getGroup(i).call();
+                    console.log(`Fallback scan group ${i} result:`, result);
+                    const name = result.name || result[0] || 'Unnamed Group';
+                    const members = result.members || result[1] || [];
+                    if (members && Array.isArray(members) && members.map(addr => addr.toLowerCase()).includes(userAddress.toLowerCase())) {
+                        groupIds.add(i.toString());
+                        console.log(`Added groupId ${i} from fallback scan`);
+                    } else {
+                        console.log(`Group ${i} does not include user ${userAddress}`);
+                    }
+                } catch (error) {
+                    console.error(`Error fetching group ${i} in fallback scan:`, error.message, error);
+                    if (error.message.includes('execution reverted')) {
+                        console.log(`Group ${i} reverted, likely does not exist`);
+                    }
                 }
                 await new Promise(resolve => setTimeout(resolve, 500));
             }
-            console.log('Group IDs from userGroups:', Array.from(groupIds));
-            if (groupIds.size === 0) {
-                console.log('No groups found in userGroups, attempting fallback group scan');
-                for (let i = 1; i <= groupCount && i <= 50; i++) {
-                    try {
-                        const result = await getContract().methods.getGroup(i).call();
-                        console.log(`Fallback scan group ${i} result:`, result);
-                        const name = result.name || result[0] || 'Unnamed Group';
-                        const members = result.members || result[1] || [];
-                        if (members && Array.isArray(members) && members.map(addr => addr.toLowerCase()).includes(userAddress.toLowerCase())) {
-                            groupIds.add(i.toString());
-                            console.log(`Added groupId ${i} from fallback scan`);
-                        } else {
-                            console.log(`Group ${i} does not include user ${userAddress}`);
-                        }
-                    } catch (error) {
-                        console.error(`Error fetching group ${i} in fallback scan:`, error.message, error);
-                        if (error.message.includes('execution reverted')) {
-                            console.log(`Group ${i} reverted, likely does not exist`);
-                        }
-                    }
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                }
-                console.log('Group IDs from fallback scan:', Array.from(groupIds));
-            }
-            if (groupIds.size === 0) {
-                dashboardContent.innerHTML = '<p>No groups found for this account. Create one in the Add Expense page or verify your MetaMask account.</p>';
-                return;
-            }
-            let events = [];
+            console.log('Group IDs from fallback scan:', Array.from(groupIds));
+        }
+        if (groupIds.size === 0) {
+            dashboardContent.innerHTML = '<p>No groups found for this account. Create one in the Add Expense page or verify your MetaMask account.</p>';
+            return;
+        }
+        let events = [];
+        try {
+            events = await getContract().getPastEvents('ExpenseAdded', { fromBlock: 0, toBlock: 'latest' });
+            console.log('ExpenseAdded events:', events);
+        } catch (error) {
+            console.error('Error fetching ExpenseAdded events:', error);
+        }
+        dashboardContent.innerHTML = '';
+        const expenseCount = parseInt(await getContract().methods.expenseCount().call()) || 0;
+        console.log('Total expense count from contract:', expenseCount);
+        for (let groupId of groupIds) {
             try {
-                events = await getContract().getPastEvents('ExpenseAdded', { fromBlock: 0, toBlock: 'latest' });
-                console.log('ExpenseAdded events:', events);
-            } catch (error) {
-                console.error('Error fetching ExpenseAdded events:', error);
-            }
-            dashboardContent.innerHTML = '';
-            const expenseCount = parseInt(await getContract().methods.expenseCount().call()) || 0;
-            console.log('Total expense count from contract:', expenseCount);
-            for (let groupId of groupIds) {
-                try {
-                    const result = await getContract().methods.getGroup(groupId).call();
-                    console.log(`Group ${groupId} raw result:`, result);
-                    const name = result.name || result[0] || 'Unnamed Group';
-                    const members = result.members || result[1] || [];
-                    if (!members || !Array.isArray(members)) {
-                        console.warn(`Group ${groupId} has invalid members array:`, members);
-                        continue;
-                    }
-                    const groupBlockie = await createBlockie(groupId.toString(), 64);
-                    const memberAvatars = await Promise.all(
-                        members.map(async addr => {
-                            const initial = getMemberName(addr)[0].toUpperCase();
-                            return {
-                                addr,
-                                name: getMemberName(addr),
-                                avatar: await createBlockie(addr, 32, initial)
-                            };
-                        })
-                    );
-                    let balMembers = [], balances = [];
-                    try {
-                        const balanceData = await getContract().methods.getGroupBalances(groupId).call();
-                        balMembers = balanceData.members || balanceData[0] || [];
-                        balances = balanceData.bals || balanceData[1] || [];
-                        console.log(`Group ${groupId} balances:`, { balMembers, balances });
-                    } catch (error) {
-                        console.error(`Error fetching balances for group ${groupId}:`, error);
-                    }
-                    const balanceAvatars = await Promise.all(
-                        balMembers.map(async addr => ({
+                const result = await getContract().methods.getGroup(groupId).call();
+                console.log(`Group ${groupId} raw result:`, result);
+                const name = result.name || result[0] || 'Unnamed Group';
+                const members = result.members || result[1] || [];
+                if (!members || !Array.isArray(members)) {
+                    console.warn(`Group ${groupId} has invalid members array:`, members);
+                    continue;
+                }
+                const groupBlockie = await createBlockie(groupId.toString(), 64);
+                const memberAvatars = await Promise.all(
+                    members.map(async addr => {
+                        const initial = getMemberName(addr)[0].toUpperCase();
+                        return {
                             addr,
                             name: getMemberName(addr),
-                            avatar: await createBlockie(addr, 32, getMemberName(addr)[0].toUpperCase())
+                            avatar: await createBlockie(addr, 32, initial)
+                        };
+                    })
+                );
+                let balMembers = [], balances = [];
+                try {
+                    const balanceData = await getContract().methods.getGroupBalances(groupId).call();
+                    balMembers = balanceData.members || balanceData[0] || [];
+                    balances = balanceData.bals || balanceData[1] || [];
+                    console.log(`Group ${groupId} balances:`, { balMembers, balances });
+                } catch (error) {
+                    console.error(`Error fetching balances for group ${groupId}:`, error);
+                }
+                const balanceAvatars = await Promise.all(
+                    balMembers.map(async addr => ({
+                        addr,
+                        name: getMemberName(addr),
+                        avatar: await createBlockie(addr, 32, getMemberName(addr)[0].toUpperCase())
+                    }))
+                );
+                let groupExpenses = events
+                    .filter(event => String(event.returnValues.groupId) === String(groupId))
+                    .map(event => ({
+                        id: event.returnValues.expenseId,
+                        description: event.returnValues.description || 'No description',
+                        amount: web3.utils.fromWei(event.returnValues.amount || '0', 'ether'),
+                        payer: event.returnValues.payer || 'Unknown',
+                        splitType: event.returnValues.splitType || 'Unknown',
+                        timestamp: event.blockNumber ? (async () => {
+                            try {
+                                const block = await web3.eth.getBlock(event.blockNumber);
+                                return new Date(block.timestamp * 1000).toLocaleString();
+                            } catch {
+                                return 'N/A';
+                            }
+                        })() : 'N/A'
+                    }));
+                if (groupExpenses.length === 0) {
+                    console.log(`No ExpenseAdded events for group ${groupId}, trying fallback expense fetch`);
+                    groupExpenses = await fetchExpensesFallback(groupId, expenseCount);
+                    console.log(`Fallback expenses for group ${groupId}:`, groupExpenses);
+                }
+                console.log(`Group ${groupId} expenses:`, groupExpenses);
+                const groupDiv = document.createElement('div');
+                groupDiv.className = 'group';
+                groupDiv.innerHTML = `
+                    <div class="group-header">
+                        <img src="${groupBlockie}" alt="Group ${groupId} Avatar" class="group-avatar">
+                        <h3>${name} (ID: ${groupId})</h3>
+                    </div>
+                    <p><strong>Members:</strong></p>
+                    <div class="members-container">
+                        ${memberAvatars.map(({ name, avatar }) => `
+                            <span class="member-item">
+                                <img src="${avatar}" class="member-avatar" alt="${name} Avatar">
+                                <span class="member-name">${name}</span>
+                            </span>
+                        `).join('')}
+                    </div>
+                    <h4>Expenses:</h4>
+                    <div class="expenses-placeholder">Loading expenses...</div>
+                    <h4>Balances:</h4>
+                    ${balMembers.length > 0 ? balanceAvatars.map(({ name, avatar }, i) => `
+                        <div class="balance-item">
+                            <img src="${avatar}" class="balance-avatar" alt="${name} Avatar">
+                            <span class="member-name">${name}</span>
+                            <span>: ${parseFloat(web3.utils.fromWei(balances[i] || '0', 'ether')).toFixed(2)} SHM</span>
+                        </div>
+                    `).join('') : '<p>No balances available.</p>'}
+                    <h4>Settle Debt</h4>
+                    <form id="settleDebtForm-${groupId}" class="settle-debt-form">
+                        <input type="hidden" name="groupId" value="${groupId}">
+                        <label for="settleTo-${groupId}">Pay To:</label>
+                        <select id="settleTo-${groupId}" required>
+                            <option value="" disabled selected>Select a member</option>
+                            ${members
+                                .filter(addr => addr.toLowerCase() !== userAddress.toLowerCase())
+                                .map(addr => `<option value="${addr}">${getMemberName(addr)}</option>`)
+                                .join('')}
+                        </select>
+                        <label for="settleAmount-${groupId}">Amount (SHM):</label>
+                        <input type="number" id="settleAmount-${groupId}" placeholder="Select a member to calculate" step="0.01" required>
+                        <button type="submit" class="submit-group">Settle Debt</button>
+                    </form>
+                    <p id="settleMessage-${groupId}"></p>
+                `;
+                dashboardContent.appendChild(groupDiv);
+                const expensePromises = groupExpenses.map(exp => exp.timestamp);
+                Promise.all(expensePromises).then(async timestamps => {
+                    const expenseAvatars = await Promise.all(
+                        groupExpenses.map(async exp => ({
+                            ...exp,
+                            avatar: await createBlockie(exp.payer, 32, getMemberName(exp.payer)[0].toUpperCase())
                         }))
                     );
-                    let groupExpenses = events
-                        .filter(event => String(event.returnValues.groupId) === String(groupId))
-                        .map(event => ({
-                            id: event.returnValues.expenseId,
-                            description: event.returnValues.description || 'No description',
-                            amount: web3.utils.fromWei(event.returnValues.amount || '0', 'ether'),
-                            payer: event.returnValues.payer || 'Unknown',
-                            splitType: event.returnValues.splitType || 'Unknown',
-                            timestamp: event.blockNumber ? (async () => {
-                                try {
-                                    const block = await web3.eth.getBlock(event.blockNumber);
-                                    return new Date(block.timestamp * 1000).toLocaleString();
-                                } catch {
-                                    return 'N/A';
-                                }
-                            })() : 'N/A'
-                        }));
-                    if (groupExpenses.length === 0) {
-                        console.log(`No ExpenseAdded events for group ${groupId}, trying fallback expense fetch`);
-                        groupExpenses = await fetchExpensesFallback(groupId, expenseCount);
-                        console.log(`Fallback expenses for group ${groupId}:`, groupExpenses);
+                    const expenseElements = expenseAvatars.map((exp, idx) => `
+                        <div class="expense-item">
+                            <img src="${exp.avatar}" class="expense-avatar" alt="${getMemberName(exp.payer)} Avatar">
+                            <span class="member-name">Expense ${exp.id}: ${exp.description} - ${exp.amount} SHM</span>
+                            <span>(Payer: ${getMemberName(exp.payer)}, Split: ${exp.splitType}, Date: ${timestamps[idx]})</span>
+                        </div>
+                    `);
+                    const expensesHTML = expenseElements.length > 0 ? expenseElements.join('') : '<p>No expenses found.</p>';
+                    groupDiv.querySelector('.expenses-placeholder').outerHTML = expensesHTML;
+                });
+                const settleForm = document.getElementById(`settleDebtForm-${groupId}`);
+                const settleToSelect = document.getElementById(`settleTo-${groupId}`);
+                const settleAmountInput = document.getElementById(`settleAmount-${groupId}`);
+                settleToSelect.addEventListener('change', async () => {
+                    const toAddress = settleToSelect.value;
+                    if (toAddress) {
+                        const debtAmount = await getDebtAmount(groupId, toAddress);
+                        settleAmountInput.value = debtAmount !== '0' ? parseFloat(debtAmount).toFixed(2) : '';
+                        settleAmountInput.placeholder = debtAmount !== '0' ? `Owe ${parseFloat(debtAmount).toFixed(2)} SHM` : 'No debt to settle';
+                    } else {
+                        settleAmountInput.value = '';
+                        settleAmountInput.placeholder = 'Select a member to calculate';
                     }
-                    console.log(`Group ${groupId} expenses:`, groupExpenses);
-                    const groupDiv = document.createElement('div');
-                    groupDiv.className = 'group';
-                    groupDiv.innerHTML = `
-                        <div class="group-header">
-                            <img src="${groupBlockie}" alt="Group ${groupId} Avatar" class="group-avatar">
-                            <h3>${name} (ID: ${groupId})</h3>
-                        </div>
-                        <p><strong>Members:</strong></p>
-                        <div class="members-container">
-                            ${memberAvatars.map(({ name, avatar }) => `
-                                <span class="member-item">
-                                    <img src="${avatar}" class="member-avatar" alt="${name} Avatar">
-                                    <span class="member-name">${name}</span>
-                                </span>
-                            `).join('')}
-                        </div>
-                        <h4>Expenses:</h4>
-                        <div class="expenses-placeholder">Loading expenses...</div>
-                        <h4>Balances:</h4>
-                        ${balMembers.length > 0 ? balanceAvatars.map(({ name, avatar }, i) => `
-                            <div class="balance-item">
-                                <img src="${avatar}" class="balance-avatar" alt="${name} Avatar">
-                                <span class="member-name">${name}</span>
-                                <span>: ${parseFloat(web3.utils.fromWei(balances[i] || '0', 'ether')).toFixed(2)} SHM</span>
-                            </div>
-                        `).join('') : '<p>No balances available.</p>'}
-                        <h4>Settle Debt</h4>
-                        <form id="settleDebtForm-${groupId}" class="settle-debt-form">
-                            <input type="hidden" name="groupId" value="${groupId}">
-                            <label for="settleTo-${groupId}">Pay To:</label>
-                            <select id="settleTo-${groupId}" required>
-                                <option value="" disabled selected>Select a member</option>
-                                ${members
-                                    .filter(addr => addr.toLowerCase() !== userAddress.toLowerCase())
-                                    .map(addr => `<option value="${addr}">${getMemberName(addr)}</option>`)
-                                    .join('')}
-                            </select>
-                            <label for="settleAmount-${groupId}">Amount (SHM):</label>
-                            <input type="number" id="settleAmount-${groupId}" placeholder="Select a member to calculate" step="0.01" required>
-                            <button type="submit" class="submit-group">Settle Debt</button>
-                        </form>
-                        <p id="settleMessage-${groupId}"></p>
-                    `;
-                    dashboardContent.appendChild(groupDiv);
-                    const expensePromises = groupExpenses.map(exp => exp.timestamp);
-                    Promise.all(expensePromises).then(async timestamps => {
-                        const expenseAvatars = await Promise.all(
-                            groupExpenses.map(async exp => ({
-                                ...exp,
-                                avatar: await createBlockie(exp.payer, 32, getMemberName(exp.payer)[0].toUpperCase())
-                            }))
-                        );
-                        const expenseElements = expenseAvatars.map((exp, idx) => `
-                            <div class="expense-item">
-                                <img src="${exp.avatar}" class="expense-avatar" alt="${getMemberName(exp.payer)} Avatar">
-                                <span class="member-name">Expense ${exp.id}: ${exp.description} - ${exp.amount} SHM</span>
-                                <span>(Payer: ${getMemberName(exp.payer)}, Split: ${exp.splitType}, Date: ${timestamps[idx]})</span>
-                            </div>
-                        `);
-                        const expensesHTML = expenseElements.length > 0 ? expenseElements.join('') : '<p>No expenses found.</p>';
-                        groupDiv.querySelector('.expenses-placeholder').outerHTML = expensesHTML;
-                    });
-                    const settleForm = document.getElementById(`settleDebtForm-${groupId}`);
-                    const settleToSelect = document.getElementById(`settleTo-${groupId}`);
-                    const settleAmountInput = document.getElementById(`settleAmount-${groupId}`);
-                    settleToSelect.addEventListener('change', async () => {
-                        const toAddress = settleToSelect.value;
-                        if (toAddress) {
-                            const debtAmount = await getDebtAmount(groupId, toAddress);
-                            settleAmountInput.value = debtAmount !== '0' ? parseFloat(debtAmount).toFixed(2) : '';
-                            settleAmountInput.placeholder = debtAmount !== '0' ? `Owe ${parseFloat(debtAmount).toFixed(2)} SHM` : 'No debt to settle';
-                        } else {
-                            settleAmountInput.value = '';
-                            settleAmountInput.placeholder = 'Select a member to calculate';
-                        }
-                    });
-                    settleForm.addEventListener('submit', async function(e) {
-                        e.preventDefault();
-                        if (!web3 || !getContract() || !getAccount()) {
-                            alert('Please connect MetaMask first.');
-                            return;
-                        }
-                        const settleGroupId = groupId;
-                        const toAddress = document.getElementById(`settleTo-${groupId}`)?.value;
-                        const amountInput = document.getElementById(`settleAmount-${groupId}`)?.value;
-                        const settleMessage = document.getElementById(`settleMessage-${groupId}`);
-                        let amount;
-                        try {
-                            amount = web3.utils.toWei(amountInput, 'ether');
-                        } catch (error) {
-                            settleMessage.textContent = 'Invalid amount format. Please enter a valid number.';
-                            return;
-                        }
-                        try {
-                            const tx = await getContract().methods.settleDebt(settleGroupId, toAddress, amount).send({
-                                from: await getAccount(),
-                                value: '0',
-                                gasPrice: web3.utils.toWei('50', 'gwei')
-                            });
-                            settleMessage.textContent = `Debt settled! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`;
-                            this.reset();
-                            await populateDashboard();
-                        } catch (error) {
-                            console.error(`Debt settlement error for group ${settleGroupId}:`, error);
-                            settleMessage.textContent = 'Error: ' + (error.message.includes('revert') ? 'Invalid input or contract revert. Check inputs and try again.' : error.message);
-                        }
-                    });
-                } catch (error) {
-                    console.error(`Error processing group ${groupId}:`, error);
-                }
+                });
+                settleForm.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    if (!web3 || !getContract() || !getAccount()) {
+                        alert('Please connect MetaMask first.');
+                        return;
+                    }
+                    const settleGroupId = groupId;
+                    const toAddress = document.getElementById(`settleTo-${groupId}`)?.value;
+                    const amountInput = document.getElementById(`settleAmount-${groupId}`)?.value;
+                    const settleMessage = document.getElementById(`settleMessage-${groupId}`);
+                    let amount;
+                    try {
+                        amount = web3.utils.toWei(amountInput, 'ether');
+                    } catch (error) {
+                        settleMessage.textContent = 'Invalid amount format. Please enter a valid number.';
+                        return;
+                    }
+                    try {
+                        const tx = await getContract().methods.settleDebt(settleGroupId, toAddress, amount).send({
+                            from: await getAccount(),
+                            value: '0',
+                            gasPrice: web3.utils.toWei('50', 'gwei')
+                        });
+                        settleMessage.textContent = `Debt settled! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`;
+                        this.reset();
+                        await populateDashboard();
+                    } catch (error) {
+                        console.error(`Debt settlement error for group ${settleGroupId}:`, error);
+                        settleMessage.textContent = 'Error: ' + (error.message.includes('revert') ? 'Invalid input or contract revert. Check inputs and try again.' : error.message);
+                    }
+                });
+            } catch (error) {
+                console.error(`Error processing group ${groupId}:`, error);
             }
-        } catch (error) {
-            console.error('Error populating dashboard:', error);
-            dashboardContent.innerHTML = '<p>Error loading groups: ' + error.message + '. Please check your MetaMask connection and try again.</p>';
         }
+    } catch (error) {
+        console.error('Error populating dashboard:', error);
+        dashboardContent.innerHTML = '<p>Error loading groups: ' + error.message + '. Please check your MetaMask connection and try again.</p>';
     }
-
-    // Initial render
-    await fetchAndRenderGroups();
-
-    // Start polling
-    pollingInterval = setInterval(async () => {
-        console.log('Polling for new expenses...');
-        await fetchAndRenderGroups();
-    }, POLL_INTERVAL);
-
-    // Stop polling when the user navigates away
-    window.addEventListener('unload', () => {
-        if (pollingInterval) {
-            console.log('Stopping dashboard polling');
-            clearInterval(pollingInterval);
-        }
-    });
 }
 
 async function fetchShmPrice() {
@@ -816,7 +792,7 @@ async function fetchShmPrice() {
         const cacheKey = `${cacheKeyPrefix}${currency}`;
         const cacheTimestampKey = `${cacheTimestampKeyPrefix}${currency}`;
         const cachedData = localStorage.getItem(cacheKey);
-        const cacheTimestamp = localStorage.getItem(cacheTimestampKey);
+        const cachedTimestamp = localStorage.getItem(cacheTimestampKey);
         
         if (cachedData && cachedTimestamp && (now - parseInt(cachedTimestamp)) < cacheDuration) {
             console.log(`Using cached SHM price for ${currency}:`, JSON.parse(cachedData));
