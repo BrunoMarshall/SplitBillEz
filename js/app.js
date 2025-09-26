@@ -368,33 +368,26 @@ async function populateDashboard() {
     try {
         const userAddress = await getAccount();
         console.log('Fetching groups for dashboard:', userAddress);
-        const groupIds = [];
-        for (let i = 0; i < 50; i++) {
-            let attempts = 3;
-            while (attempts > 0) {
-                try {
-                    const groupId = await getContract().methods.userGroups(userAddress, i).call();
-                    console.log(`userGroups[${i}]:`, groupId);
-                    if (parseInt(groupId) >= 0 && groupId !== "" && groupId !== "0") {
-                        groupIds.push(groupId);
-                    } else {
-                        console.log(`Stopping at index ${i}: invalid groupId ${groupId}`);
-                        break;
-                    }
-                } catch (error) {
-                    console.error(`Error fetching userGroups[${i}], attempt ${4 - attempts}:`, error);
-                    attempts--;
-                    if (attempts === 0) {
-                        console.log(`Stopping at index ${i} after failed attempts`);
-                        break;
-                    }
-                    await new Promise(resolve => setTimeout(resolve, 1000));
+        const groupCount = parseInt(await getContract().methods.groupCount().call()) || 0;
+        console.log('Total group count:', groupCount);
+        const groupIds = new Set(); // Use Set to avoid duplicates
+        for (let i = 0; i < Math.min(groupCount, 50); i++) {
+            try {
+                const groupId = await getContract().methods.userGroups(userAddress, i).call();
+                console.log(`userGroups[${i}]:`, groupId);
+                if (groupId && parseInt(groupId) > 0 && groupId !== "0") {
+                    groupIds.add(groupId);
+                } else {
+                    console.log(`Stopping at index ${i}: invalid groupId ${groupId}`);
+                    break;
                 }
+            } catch (error) {
+                console.error(`Error fetching userGroups[${i}]:`, error);
+                break; // Stop on error to avoid infinite retries
             }
-            if (attempts === 0) break;
         }
-        console.log('Dashboard group IDs:', groupIds);
-        if (groupIds.length === 0) {
+        console.log('Dashboard group IDs:', Array.from(groupIds));
+        if (groupIds.size === 0) {
             dashboardContent.innerHTML = '<p>No groups found. Create one in the Add Expense page.</p>';
             return;
         }
@@ -449,9 +442,7 @@ async function populateDashboard() {
                         return `<img src="${createBlockie(addr, 32, initial)}" class="member-avatar" alt="${getMemberName(addr)} Avatar"> ${getMemberName(addr)}`;
                     }).join(', ')}</p>
                     <h4>Expenses:</h4>
-                    ${groupExpenses.length > 0 ? Promise.all(groupExpenses.map(async exp => `
-                        <p>Expense ${exp.id}: ${exp.description} - ${exp.amount} SHM (Payer: <img src="${createBlockie(exp.payer, 32, getMemberName(exp.payer)[0].toUpperCase())}" class="member-avatar" alt="${getMemberName(exp.payer)} Avatar"> ${getMemberName(exp.payer)}, Split: ${exp.splitType}, Date: ${await exp.timestamp})</p>
-                    `)).then(results => results.join('')) : '<p>No expenses found.</p>'}
+                    <div class="expenses-placeholder">Loading expenses...</div>
                     <h4>Balances:</h4>
                     ${balMembers.length > 0 ? balMembers.map((addr, i) => `
                         <p><img src="${createBlockie(addr, 32, getMemberName(addr)[0].toUpperCase())}" class="member-avatar" alt="${getMemberName(addr)} Avatar"> ${getMemberName(addr)}: ${parseFloat(web3.utils.fromWei(balances[i] || '0', 'ether')).toFixed(2)} SHM</p>
@@ -481,7 +472,7 @@ async function populateDashboard() {
                         <p>Expense ${exp.id}: ${exp.description} - ${exp.amount} SHM (Payer: <img src="${createBlockie(exp.payer, 32, getMemberName(exp.payer)[0].toUpperCase())}" class="member-avatar" alt="${getMemberName(exp.payer)} Avatar"> ${getMemberName(exp.payer)}, Split: ${exp.splitType}, Date: ${timestamps[idx]})</p>
                     `);
                     const expensesHTML = expenseElements.length > 0 ? expenseElements.join('') : '<p>No expenses found.</p>';
-                    groupDiv.querySelector('h4:nth-of-type(2)').insertAdjacentHTML('afterend', expensesHTML);
+                    groupDiv.querySelector('.expenses-placeholder').outerHTML = expensesHTML;
                 });
                 document.getElementById(`settleDebtForm-${groupId}`).addEventListener('submit', async function(e) {
                     e.preventDefault();
@@ -577,34 +568,27 @@ async function populateGroupDropdown() {
         const userAddress = await getAccount();
         console.log('Fetching groups for:', userAddress);
         document.getElementById('userAddress').value = userAddress;
-        const groupIds = [];
-        for (let i = 0; i < 50; i++) {
-            let attempts = 3;
-            while (attempts > 0) {
-                try {
-                    const groupId = await getContract().methods.userGroups(userAddress, i).call();
-                    console.log(`userGroups[${i}]:`, groupId);
-                    if (parseInt(groupId) >= 0 && groupId !== "" && groupId !== "0") {
-                        groupIds.push(groupId);
-                    } else {
-                        console.log(`Stopping at index ${i}: invalid groupId ${groupId}`);
-                        break;
-                    }
-                } catch (error) {
-                    console.error(`Error fetching userGroups[${i}], attempt ${4 - attempts}:`, error);
-                    attempts--;
-                    if (attempts === 0) {
-                        console.log(`Stopping at index ${i} after failed attempts`);
-                        break;
-                    }
-                    await new Promise(resolve => setTimeout(resolve, 1000));
+        const groupCount = parseInt(await getContract().methods.groupCount().call()) || 0;
+        console.log('Total group count:', groupCount);
+        const groupIds = new Set(); // Use Set to avoid duplicates
+        for (let i = 0; i < Math.min(groupCount, 50); i++) {
+            try {
+                const groupId = await getContract().methods.userGroups(userAddress, i).call();
+                console.log(`userGroups[${i}]:`, groupId);
+                if (groupId && parseInt(groupId) > 0 && groupId !== "0") {
+                    groupIds.add(groupId);
+                } else {
+                    console.log(`Stopping at index ${i}: invalid groupId ${groupId}`);
+                    break;
                 }
+            } catch (error) {
+                console.error(`Error fetching userGroups[${i}]:`, error);
+                break; // Stop on error to avoid infinite retries
             }
-            if (attempts === 0) break;
         }
-        console.log('Found group IDs:', groupIds);
+        console.log('Found group IDs:', Array.from(groupIds));
         groupSelect.innerHTML = '<option value="" disabled selected>Select a group</option>';
-        if (groupIds.length === 0) {
+        if (groupIds.size === 0) {
             groupSelect.innerHTML += '<option value="create">Create a new group</option>';
             groupCreationDiv.style.display = 'block';
             submitButton.textContent = 'Create Group';
@@ -681,6 +665,11 @@ function addMemberField() {
     `;
     memberInputs.appendChild(div);
     updateRemoveButtons();
+    // Rebind remove button listener for the new button
+    const newRemoveButton = div.querySelector('.remove-member');
+    if (newRemoveButton) {
+        newRemoveButton.addEventListener('click', () => removeMember(newRemoveButton));
+    }
 }
 
 function removeMember(button) {
