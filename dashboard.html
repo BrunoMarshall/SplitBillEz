@@ -6,11 +6,11 @@
     <title>Dashboard - SplitBillEz</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="icon" href="images/splitbillez_favicon.png">
-    <script src="https://cdn.jsdelivr.net/npm/web3@4.16.0/dist/web3.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/ethereum-blockies-base64@0.1.0/dist/ethereum-blockies-base64.min.js"></script>
-    <script src="js/app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/ethereum-blockies-base64@0.1.0/dist/ethereum-blockies-base64.min.js" defer></script>
+    <script src="js/app.js" defer></script>
 </head>
-<body onload="window.checkMetaMaskConnection()">
+<body>
     <header>
         <div class="header-container">
             <img src="images/splitbillez_logo.png" alt="SplitBillEz Logo" class="logo">
@@ -19,7 +19,7 @@
                 <a href="dashboard.html">Dashboard</a>
                 <a href="add-expense.html">Add Expense</a>
             </nav>
-            <button class="metamask-button" onclick="window.handleMetaMaskToggle()">Connect with MetaMask</button>
+            <button class="metamask-button">Connect with MetaMask</button>
         </div>
     </header>
     <main>

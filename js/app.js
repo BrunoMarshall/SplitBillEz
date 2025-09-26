@@ -254,7 +254,7 @@ function truncateAddress(address) {
 
 function getMemberName(address) {
     const memberNames = JSON.parse(localStorage.getItem('memberNames') || '{}');
-    return memberNames[address.toLowerCase()] || truncateAddress(address);
+    return memberNames[address?.toLowerCase()] || truncateAddress(address);
 }
 
 function createBlockie(address, size = 32, initial = '') {
@@ -322,7 +322,7 @@ async function checkMetaMaskConnection() {
             return;
         }
         console.log('MetaMask provider detected');
-        if (!web3 || !web3.utils) {
+        if (!web3) {
             console.log('Initializing Web3...');
             await initWeb3();
         }
@@ -361,7 +361,7 @@ async function populateDashboard() {
         return;
     }
     dashboardContent.innerHTML = '<p>Loading groups...</p>';
-    if (!web3 || !web3.utils || !getContract() || !getAccount()) {
+    if (!web3 || !getContract() || !getAccount()) {
         dashboardContent.innerHTML = '<p>Please connect MetaMask to view your groups.</p>';
         return;
     }
@@ -428,7 +428,14 @@ async function populateDashboard() {
                         amount: web3.utils.fromWei(event.returnValues.amount || '0', 'ether'),
                         payer: event.returnValues.payer || 'Unknown',
                         splitType: event.returnValues.splitType || 'Unknown',
-                        timestamp: event.blockNumber ? new Date((await web3.eth.getBlock(event.blockNumber)).timestamp * 1000).toLocaleString() : 'N/A'
+                        timestamp: event.blockNumber ? (async () => {
+                            try {
+                                const block = await web3.eth.getBlock(event.blockNumber);
+                                return new Date(block.timestamp * 1000).toLocaleString();
+                            } catch {
+                                return 'N/A';
+                            }
+                        })() : 'N/A'
                     }));
                 console.log(`Group ${groupId} expenses:`, groupExpenses);
                 const groupBlockie = createBlockie(groupId.toString(), 64);
@@ -442,9 +449,9 @@ async function populateDashboard() {
                         return `<img src="${createBlockie(addr, 32, initial)}" class="member-avatar" alt="${getMemberName(addr)} Avatar"> ${getMemberName(addr)}`;
                     }).join(', ')}</p>
                     <h4>Expenses:</h4>
-                    ${groupExpenses.length > 0 ? groupExpenses.map(exp => `
-                        <p>Expense ${exp.id}: ${exp.description} - ${exp.amount} SHM (Payer: <img src="${createBlockie(exp.payer, 32, getMemberName(exp.payer)[0].toUpperCase())}" class="member-avatar" alt="${getMemberName(exp.payer)} Avatar"> ${getMemberName(exp.payer)}, Split: ${exp.splitType}, Date: ${exp.timestamp})</p>
-                    `).join('') : '<p>No expenses found.</p>'}
+                    ${groupExpenses.length > 0 ? Promise.all(groupExpenses.map(async exp => `
+                        <p>Expense ${exp.id}: ${exp.description} - ${exp.amount} SHM (Payer: <img src="${createBlockie(exp.payer, 32, getMemberName(exp.payer)[0].toUpperCase())}" class="member-avatar" alt="${getMemberName(exp.payer)} Avatar"> ${getMemberName(exp.payer)}, Split: ${exp.splitType}, Date: ${await exp.timestamp})</p>
+                    `)).then(results => results.join('')) : '<p>No expenses found.</p>'}
                     <h4>Balances:</h4>
                     ${balMembers.length > 0 ? balMembers.map((addr, i) => `
                         <p><img src="${createBlockie(addr, 32, getMemberName(addr)[0].toUpperCase())}" class="member-avatar" alt="${getMemberName(addr)} Avatar"> ${getMemberName(addr)}: ${parseFloat(web3.utils.fromWei(balances[i] || '0', 'ether')).toFixed(2)} SHM</p>
@@ -467,15 +474,24 @@ async function populateDashboard() {
                     <p id="settleMessage-${groupId}"></p>
                 `;
                 dashboardContent.appendChild(groupDiv);
+                // Handle async expense timestamps
+                const expensePromises = groupExpenses.map(exp => exp.timestamp);
+                Promise.all(expensePromises).then(async timestamps => {
+                    const expenseElements = groupExpenses.map((exp, idx) => `
+                        <p>Expense ${exp.id}: ${exp.description} - ${exp.amount} SHM (Payer: <img src="${createBlockie(exp.payer, 32, getMemberName(exp.payer)[0].toUpperCase())}" class="member-avatar" alt="${getMemberName(exp.payer)} Avatar"> ${getMemberName(exp.payer)}, Split: ${exp.splitType}, Date: ${timestamps[idx]})</p>
+                    `);
+                    const expensesHTML = expenseElements.length > 0 ? expenseElements.join('') : '<p>No expenses found.</p>';
+                    groupDiv.querySelector('h4:nth-of-type(2)').insertAdjacentHTML('afterend', expensesHTML);
+                });
                 document.getElementById(`settleDebtForm-${groupId}`).addEventListener('submit', async function(e) {
                     e.preventDefault();
-                    if (!web3 || !web3.utils || !getContract() || !getAccount()) {
+                    if (!web3 || !getContract() || !getAccount()) {
                         alert('Please connect MetaMask first.');
                         return;
                     }
                     const settleGroupId = groupId;
-                    const toAddress = document.getElementById(`settleTo-${groupId}`).value;
-                    const amountInput = document.getElementById(`settleAmount-${groupId}`).value;
+                    const toAddress = document.getElementById(`settleTo-${groupId}`)?.value;
+                    const amountInput = document.getElementById(`settleAmount-${groupId}`)?.value;
                     const settleMessage = document.getElementById(`settleMessage-${groupId}`);
                     let amount;
                     try {
@@ -549,7 +565,7 @@ async function populateGroupDropdown() {
         return;
     }
     groupSelect.innerHTML = '<option value="" disabled selected>Loading groups...</option>';
-    if (!web3 || !web3.utils || !getContract() || !getAccount()) {
+    if (!web3 || !getContract() || !getAccount()) {
         console.error('Web3.js, contract, or account not initialized');
         groupSelect.innerHTML = '<option value="" disabled selected>Connect wallet first</option>';
         groupCreationDiv.style.display = 'none';
@@ -661,7 +677,7 @@ function addMemberField() {
     div.innerHTML = `
         <input type="text" class="member-name" placeholder="Member Name (e.g., Bob)">
         <input type="text" class="member-address" placeholder="e.g., 0x742d...">
-        <button type="button" class="remove-member" onclick="window.removeMember(this)">Remove</button>
+        <button type="button" class="remove-member">Remove</button>
     `;
     memberInputs.appendChild(div);
     updateRemoveButtons();
@@ -689,7 +705,7 @@ function updateRemoveButtons() {
 
 async function handleExpenseFormSubmit(e) {
     e.preventDefault();
-    if (!web3 || !web3.utils || !getContract() || !getAccount()) {
+    if (!web3 || !getContract() || !getAccount()) {
         alert('Web3 not initialized or wallet not connected. Please ensure MetaMask is installed and connected.');
         return;
     }
@@ -717,7 +733,7 @@ async function handleExpenseFormSubmit(e) {
                 const nameInput = input.querySelector('.member-name');
                 const address = addressInput?.value?.trim().toLowerCase() || '';
                 const name = nameInput?.value?.trim() || '';
-                if (address && web3?.utils?.isAddress && (web3.utils.isAddress(address) || address === userAddress)) {
+                if (address && web3.utils.isAddress(address) || address === userAddress) {
                     members.push(address);
                     if (name) newMemberNames[address] = name;
                 }
@@ -813,6 +829,43 @@ function initExpenseForm() {
     }
 }
 
+// Initialize event listeners
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOMContentLoaded fired, initializing app');
+    initExpenseForm();
+    
+    // Initialize MetaMask connection check
+    checkMetaMaskConnection();
+    
+    // Add event listeners for MetaMask buttons
+    const buttons = document.querySelectorAll('.metamask-button');
+    buttons.forEach(btn => {
+        btn.addEventListener('click', handleMetaMaskToggle);
+    });
+    
+    // Add event listeners for add-expense.html
+    const currencySelect = document.getElementById('currency');
+    if (currencySelect) {
+        currencySelect.addEventListener('change', updateShmAmount);
+    }
+    const groupSelect = document.getElementById('groupId');
+    if (groupSelect) {
+        groupSelect.addEventListener('change', toggleGroupCreation);
+    }
+    const splitSelect = document.getElementById('split');
+    if (splitSelect) {
+        splitSelect.addEventListener('change', toggleCustomShares);
+    }
+    const addMemberButton = document.getElementById('addMemberButton');
+    if (addMemberButton) {
+        addMemberButton.addEventListener('click', addMemberField);
+    }
+    const removeMemberButtons = document.getElementsByClassName('remove-member');
+    Array.from(removeMemberButtons).forEach(btn => {
+        btn.addEventListener('click', () => removeMember(btn));
+    });
+});
+
 // Export globals
 window.initWeb3 = initWeb3;
 window.disconnectWallet = disconnectWallet;
@@ -833,9 +886,3 @@ window.addMemberField = addMemberField;
 window.removeMember = removeMember;
 window.updateRemoveButtons = updateRemoveButtons;
 window.initExpenseForm = initExpenseForm;
-
-// Initialize form listener on load
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOMContentLoaded fired, initializing expense form');
-    initExpenseForm();
-});
