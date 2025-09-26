@@ -9,7 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/web3@4.16.0/dist/web3.min.js"></script>
     <script src="js/app.js"></script>
 </head>
-<body>
+<body onload="checkMetaMaskConnection()">
     <header>
         <div class="header-container">
             <img src="images/splitbillez_logo.png" alt="SplitBillEz Logo" class="logo">
@@ -53,6 +53,27 @@
         </div>
     </footer>
     <script>
+        // Check MetaMask connection on load
+        async function checkMetaMaskConnection() {
+            console.log('Checking MetaMask connection on page load...');
+            try {
+                if (window.ethereum && window.getAccount()) {
+                    const account = await window.getAccount();
+                    console.log('MetaMask connected on load:', account);
+                    if (account) {
+                        await populateDashboard();
+                    } else {
+                        console.log('No account connected, waiting for user to connect MetaMask');
+                    }
+                } else {
+                    console.log('MetaMask not detected or not initialized');
+                }
+            } catch (error) {
+                console.error('Error checking MetaMask connection:', error);
+                document.getElementById('dashboardContent').innerHTML = '<p>Error checking MetaMask connection: ' + error.message + '. Please refresh and reconnect MetaMask.</p>';
+            }
+        }
+
         // Manual Blockies implementation
         function createGroupAvatar(groupId) {
             try {
@@ -131,10 +152,12 @@
         async function populateDashboard() {
             const dashboardContent = document.getElementById('dashboardContent');
             dashboardContent.innerHTML = '<p>Loading groups...</p>';
+            console.log('Starting populateDashboard...');
 
             if (!window.web3 || !window.web3.utils) {
                 console.error('Web3.js or web3.utils is not initialized');
                 try {
+                    console.log('Attempting Web3 reinitialization...');
                     await initWeb3();
                 } catch (error) {
                     console.error('Web3 reinitialization failed:', error);
