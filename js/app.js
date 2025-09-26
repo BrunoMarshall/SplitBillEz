@@ -367,28 +367,54 @@ async function populateDashboard() {
     }
     try {
         const userAddress = await getAccount();
-        console.log('Fetching groups for dashboard:', userAddress);
+        console.log('Fetching groups for dashboard, user:', userAddress);
         const groupCount = parseInt(await getContract().methods.groupCount().call()) || 0;
-        console.log('Total group count:', groupCount);
-        const groupIds = new Set(); // Use Set to avoid duplicates
+        console.log('Total group count from contract:', groupCount);
+        const groupIds = new Set();
+        // Try fetching userGroups with retries
         for (let i = 0; i < Math.min(groupCount, 50); i++) {
-            try {
-                const groupId = await getContract().methods.userGroups(userAddress, i).call();
-                console.log(`userGroups[${i}]:`, groupId);
-                if (groupId && parseInt(groupId) > 0 && groupId !== "0") {
-                    groupIds.add(groupId);
-                } else {
-                    console.log(`Stopping at index ${i}: invalid groupId ${groupId}`);
-                    break;
+            let attempts = 3;
+            while (attempts > 0) {
+                try {
+                    const groupId = await getContract().methods.userGroups(userAddress, i).call();
+                    console.log(`userGroups[${i}]:`, groupId);
+                    if (groupId && parseInt(groupId) > 0 && groupId !== "0") {
+                        groupIds.add(groupId);
+                    } else {
+                        console.log(`Stopping userGroups scan at index ${i}: invalid groupId ${groupId}`);
+                        break;
+                    }
+                } catch (error) {
+                    console.error(`Error fetching userGroups[${i}], attempt ${4 - attempts}:`, error);
+                    attempts--;
+                    if (attempts === 0) {
+                        console.log(`Stopping userGroups scan at index ${i} after failed attempts`);
+                        break;
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                 }
-            } catch (error) {
-                console.error(`Error fetching userGroups[${i}]:`, error);
-                break; // Stop on error to avoid infinite retries
             }
+            if (attempts === 0) break;
         }
-        console.log('Dashboard group IDs:', Array.from(groupIds));
+        console.log('Group IDs from userGroups:', Array.from(groupIds));
+        // Fallback scan if no groups found
         if (groupIds.size === 0) {
-            dashboardContent.innerHTML = '<p>No groups found. Create one in the Add Expense page.</p>';
+            console.log('No groups found in userGroups, attempting fallback group scan');
+            for (let i = 1; i <= groupCount && i <= 50; i++) {
+                try {
+                    const result = await getContract().methods.getGroup(i).call();
+                    const members = result[1] || result.members || [];
+                    if (members && Array.isArray(members) && members.map(addr => addr.toLowerCase()).includes(userAddress.toLowerCase())) {
+                        groupIds.add(i.toString());
+                    }
+                } catch (error) {
+                    console.error(`Error fetching group ${i} in fallback scan:`, error);
+                }
+            }
+            console.log('Group IDs from fallback scan:', Array.from(groupIds));
+        }
+        if (groupIds.size === 0) {
+            dashboardContent.innerHTML = '<p>No groups found for this account. Create one in the Add Expense page or verify your MetaMask account.</p>';
             return;
         }
         const events = await getContract().getPastEvents('ExpenseAdded', { fromBlock: 0, toBlock: 'latest' });
@@ -465,7 +491,6 @@ async function populateDashboard() {
                     <p id="settleMessage-${groupId}"></p>
                 `;
                 dashboardContent.appendChild(groupDiv);
-                // Handle async expense timestamps
                 const expensePromises = groupExpenses.map(exp => exp.timestamp);
                 Promise.all(expensePromises).then(async timestamps => {
                     const expenseElements = groupExpenses.map((exp, idx) => `
@@ -511,20 +536,41 @@ async function populateDashboard() {
         }
     } catch (error) {
         console.error('Error populating dashboard:', error);
-        dashboardContent.innerHTML = '<p>Error loading groups. Please try again.</p>';
+        dashboardContent.innerHTML = '<p>Error loading groups. Please verify your MetaMask account and try again.</p>';
     }
 }
 
 async function fetchShmPrice() {
+    const cacheKey = 'shmPriceCache';
+    const cacheTimestampKey = 'shmPriceTimestamp';
+    const cacheDuration = 10 * 60 * 1000; // 10 minutes in milliseconds
+    const cachedData = localStorage.getItem(cacheKey);
+    const cachedTimestamp = localStorage.getItem(cacheTimestampKey);
+    const now = Date.now();
+
+    if (cachedData && cachedTimestamp && (now - parseInt(cachedTimestamp)) < cacheDuration) {
+        console.log('Using cached SHM price:', JSON.parse(cachedData));
+        shmPrice = JSON.parse(cachedData);
+        updateShmAmount();
+        return;
+    }
+
     try {
+        console.log('Fetching SHM price from CoinGecko');
         const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=shardeum&vs_currencies=eur,usd,inr');
         const data = await response.json();
-        shmPrice = data.shardeum || { eur: 0.1, usd: 0.11, inr: 9.0 }; // Fallback prices
-        console.log('Fetched SHM price:', shmPrice);
+        shmPrice = data.shardeum || { eur: 0.1, usd: 0.11, inr: 9.0 };
+        console.log '
+
+Fetched SHM price:', shmPrice);
+        localStorage.setItem(cacheKey, JSON.stringify(shmPrice));
+        localStorage.setItem(cacheTimestampKey, now.toString());
         updateShmAmount();
     } catch (error) {
         console.error('Error fetching SHM price:', error);
-        shmPrice = { eur: 0.1, usd: 0.11, inr: 9.0 }; // Fallback prices
+        shmPrice = { eur: 0.1, usd: 0.11, inr: 9.0 };
+        localStorage.setItem(cacheKey, JSON.stringify(shmPrice));
+        localStorage.setItem(cacheTimestampKey, now.toString());
         const shmAmountElement = document.getElementById('shmAmount');
         if (shmAmountElement) {
             shmAmountElement.textContent = 'Error fetching SHM price. Using default.';
@@ -569,30 +615,57 @@ async function populateGroupDropdown() {
         console.log('Fetching groups for:', userAddress);
         document.getElementById('userAddress').value = userAddress;
         const groupCount = parseInt(await getContract().methods.groupCount().call()) || 0;
-        console.log('Total group count:', groupCount);
-        const groupIds = new Set(); // Use Set to avoid duplicates
+        console.log('Total group count from contract:', groupCount);
+        const groupIds = new Set();
+        // Try fetching userGroups with retries
         for (let i = 0; i < Math.min(groupCount, 50); i++) {
-            try {
-                const groupId = await getContract().methods.userGroups(userAddress, i).call();
-                console.log(`userGroups[${i}]:`, groupId);
-                if (groupId && parseInt(groupId) > 0 && groupId !== "0") {
-                    groupIds.add(groupId);
-                } else {
-                    console.log(`Stopping at index ${i}: invalid groupId ${groupId}`);
-                    break;
+            let attempts = 3;
+            while (attempts > 0) {
+                try {
+                    const groupId = await getContract().methods.userGroups(userAddress, i).call();
+                    console.log(`userGroups[${i}]:`, groupId);
+                    if (groupId && parseInt(groupId) > 0 && groupId !== "0") {
+                        groupIds.add(groupId);
+                    } else {
+                        console.log(`Stopping userGroups scan at index ${i}: invalid groupId ${groupId}`);
+                        break;
+                    }
+                } catch (error) {
+                    console.error(`Error fetching userGroups[${i}], attempt ${4 - attempts}:`, error);
+                    attempts--;
+                    if (attempts === 0) {
+                        console.log(`Stopping userGroups scan at index ${i} after failed attempts`);
+                        break;
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                 }
-            } catch (error) {
-                console.error(`Error fetching userGroups[${i}]:`, error);
-                break; // Stop on error to avoid infinite retries
             }
+            if (attempts === 0) break;
         }
-        console.log('Found group IDs:', Array.from(groupIds));
+        console.log('Group IDs from userGroups:', Array.from(groupIds));
+        // Fallback scan if no groups found
+        if (groupIds.size === 0) {
+            console.log('No groups found in userGroups, attempting fallback group scan');
+            for (let i = 1; i <= groupCount && i <= 50; i++) {
+                try {
+                    const result = await getContract().methods proceeds
+.getGroup(i).call();
+                    const members = result[1] || result.members || [];
+                    if (members && Array.isArray(members) && members.map(addr => addr.toLowerCase()).includes(userAddress.toLowerCase())) {
+                        groupIds.add(i.toString());
+                    }
+                } catch (error) {
+                    console.error(`Error fetching group ${i} in fallback scan:`, error);
+                }
+            }
+            console.log('Group IDs from fallback scan:', Array.from(groupIds));
+        }
         groupSelect.innerHTML = '<option value="" disabled selected>Select a group</option>';
         if (groupIds.size === 0) {
             groupSelect.innerHTML += '<option value="create">Create a new group</option>';
             groupCreationDiv.style.display = 'block';
             submitButton.textContent = 'Create Group';
-            expenseMessage.textContent = 'No groups found. Create one to add expenses.';
+            expenseMessage.textContent = 'No groups found for this account. Create one to add expenses or verify your MetaMask account.';
         } else {
             groupCreationDiv.style.display = 'none';
             submitButton.textContent = 'Add Expense';
@@ -611,7 +684,7 @@ async function populateGroupDropdown() {
                     option.value = groupId;
                     option.textContent = `${name} (ID: ${groupId})`;
                     groupSelect.appendChild(option);
-                } catch (error) {
+                } import catch (error) {
                     console.error(`Error fetching group ${groupId}:`, error);
                 }
             }
@@ -625,12 +698,13 @@ async function populateGroupDropdown() {
         groupSelect.innerHTML = '<option value="" disabled selected>Error loading groups</option><option value="create">Create a new group</option>';
         groupCreationDiv.style.display = 'block';
         submitButton.textContent = 'Create Group';
-        expenseMessage.textContent = 'Error loading groups. Please create a new group.';
+        expenseMessage.textContent = 'Error loading groups. Please create a new group or verify your MetaMask account.';
     }
 }
 
 function toggleCustomShares() {
-    const splitSelect = document.getElementById('split');
+    const split Ultima
+splitSelect = document.getElementById('split');
     const customInput = document.getElementById('customShares');
     const customLabel = document.getElementById('customLabel');
     if (!splitSelect || !customInput || !customLabel) return;
@@ -665,7 +739,6 @@ function addMemberField() {
     `;
     memberInputs.appendChild(div);
     updateRemoveButtons();
-    // Rebind remove button listener for the new button
     const newRemoveButton = div.querySelector('.remove-member');
     if (newRemoveButton) {
         newRemoveButton.addEventListener('click', () => removeMember(newRemoveButton));
@@ -818,21 +891,14 @@ function initExpenseForm() {
     }
 }
 
-// Initialize event listeners
 document.addEventListener('DOMContentLoaded', () => {
     console.log('DOMContentLoaded fired, initializing app');
     initExpenseForm();
-    
-    // Initialize MetaMask connection check
     checkMetaMaskConnection();
-    
-    // Add event listeners for MetaMask buttons
     const buttons = document.querySelectorAll('.metamask-button');
     buttons.forEach(btn => {
         btn.addEventListener('click', handleMetaMaskToggle);
     });
-    
-    // Add event listeners for add-expense.html
     const currencySelect = document.getElementById('currency');
     if (currencySelect) {
         currencySelect.addEventListener('change', updateShmAmount);
@@ -855,7 +921,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-// Export globals
 window.initWeb3 = initWeb3;
 window.disconnectWallet = disconnectWallet;
 window.handleMetaMaskToggle = handleMetaMaskToggle;
