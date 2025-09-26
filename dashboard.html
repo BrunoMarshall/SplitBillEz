@@ -6,8 +6,8 @@
     <title>Dashboard - SplitBillEz</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="icon" href="images/splitbillez_favicon.png">
-    <script src="https://cdn.jsdelivr.net/npm/web3@latest/dist/web3.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/blockies/0.0.2/blockies.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/web3@4.16.0/dist/web3.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ethereum-blockies-base64@0.1.0/dist/index.min.js"></script>
 </head>
 <body onload="initWeb3().then(populateDashboard)">
     <header>
@@ -88,12 +88,19 @@
         }
 
         function createGroupAvatar(groupId) {
-            const blockie = createIcon({
-                seed: String(groupId),
-                size: 8,
-                scale: 4
-            });
-            return blockie.toDataURL();
+            try {
+                return makeBlockie(String(groupId));
+            } catch (error) {
+                console.error('Error generating group avatar for groupId ' + groupId + ':', error);
+                // Fallback: Gray square
+                const canvas = document.createElement('canvas');
+                canvas.width = 32;
+                canvas.height = 32;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#ccc';
+                ctx.fillRect(0, 0, 32, 32);
+                return canvas.toDataURL();
+            }
         }
 
         async function populateDashboard() {
@@ -166,20 +173,22 @@
                                 try {
                                     const expense = await window.getContract().methods.expenses(i).call();
                                     console.log(`Expense ${i} raw data:`, expense);
-                                    const expenseGroupId = String(expense.groupId).trim();
+                                    const expenseGroupId = expense.groupId !== undefined ? String(expense.groupId).trim() : 'undefined';
                                     const currentGroupId = String(groupId).trim();
                                     console.log(`Comparing expense.groupId (${expenseGroupId}) with groupId (${currentGroupId})`);
                                     if (expenseGroupId === currentGroupId) {
                                         expenses.push({
                                             id: i,
                                             description: expense.description || 'No description',
-                                            amount: window.web3().utils.fromWei(expense.amount || '0', 'ether'),
+                                            amount: window.web3.utils.fromWei(expense.amount || '0', 'ether'),
                                             payer: expense.payer || 'Unknown',
                                             splitType: expense.splitType || 'Unknown',
                                             timestamp: expense.timestamp && parseInt(expense.timestamp) > 0
                                                 ? new Date(parseInt(expense.timestamp) * 1000).toLocaleString()
                                                 : 'N/A'
                                         });
+                                    } else {
+                                        console.warn(`Skipping expense ${i}: groupId ${expenseGroupId} does not match ${currentGroupId}`);
                                     }
                                     break;
                                 } catch (error) {
@@ -204,11 +213,11 @@
                                 <p>Expense ${exp.id}: ${exp.description} - ${exp.amount} SHM 
                                 (Payer: <span class="member"><img src="${createInitialsAvatar(getMemberName(exp.payer))}" class="user-avatar" alt="User Avatar"> ${getMemberName(exp.payer)}</span>, 
                                 Split: ${exp.splitType}, Date: ${exp.timestamp})</p>
-                            `).join('') : '<p>No expenses found.</p>'}
+                            `).join('') : '<p>No expenses found. ${expenseCount > 0 ? "Possible contract issue: groupId undefined." : ""}</p>'}
                             <h4>Balances:</h4>
                             ${balMembers.length > 0 ? balMembers.map((addr, i) => `
                                 <p><span class="member"><img src="${createInitialsAvatar(getMemberName(addr))}" class="user-avatar" alt="User Avatar"> ${getMemberName(addr)}</span>: 
-                                ${parseFloat(window.web3().utils.fromWei(balances[i] || '0', 'ether')).toFixed(2)} SHM</p>
+                                ${parseFloat(window.web3.utils.fromWei(balances[i] || '0', 'ether')).toFixed(2)} SHM</p>
                             `).join('') : '<p>No balances available.</p>'}
                             <h4>Settle Debt</h4>
                             <form id="settleDebtForm-${groupId}" class="settle-debt-form">
@@ -230,7 +239,7 @@
                         dashboardContent.appendChild(groupDiv);
                         document.getElementById(`settleDebtForm-${groupId}`).addEventListener('submit', async function(e) {
                             e.preventDefault();
-                            if (!window.web3() || !window.getContract() || !window.getAccount()) {
+                            if (!window.web3 || !window.getContract() || !window.getAccount()) {
                                 alert('Please connect MetaMask first.');
                                 return;
                             }
@@ -240,7 +249,7 @@
                             const settleMessage = document.getElementById(`settleMessage-${groupId}`);
                             let amount;
                             try {
-                                amount = window.web3().utils.toWei(amountInput, 'ether');
+                                amount = window.web3.utils.toWei(amountInput, 'ether');
                             } catch (error) {
                                 settleMessage.textContent = 'Invalid amount format. Please enter a valid number.';
                                 return;
