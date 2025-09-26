@@ -915,8 +915,10 @@ async function handleExpenseFormSubmit(e) {
         try {
             const userAddress = (await getAccount()).toLowerCase();
             Array.from(memberInputs).forEach(input => {
-                const address = input.querySelector('.member-address').value.trim().toLowerCase();
-                const name = input.querySelector('.member-name').value.trim();
+                const addressInput = input.querySelector('.member-address');
+                const nameInput = input.querySelector('.member-name');
+                const address = addressInput ? addressInput.value.trim().toLowerCase() : '';
+                const name = nameInput ? nameInput.value.trim() : '';
                 if (address && (web3.utils.isAddress(address) || address === userAddress)) {
                     members.push(address);
                     if (name) newMemberNames[address] = name;
