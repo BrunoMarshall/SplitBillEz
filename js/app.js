@@ -179,7 +179,7 @@ async function initWeb3() {
                     params: [{
                         chainId: '0x1f90',
                         chainName: 'Shardeum Unstable Testnet',
-                        rpcUrls: ['https://api-unstable.shardeum.org'],
+                        rpcUrls: ['https://cycle3.api.shardeum.org'], // Alternative RPC
                         nativeCurrency: { name: 'SHM', symbol: 'SHM', decimals: 18 },
                         blockExplorerUrls: ['https://explorer-unstable.shardeum.org']
                     }]
@@ -258,22 +258,43 @@ function getMemberName(address) {
 }
 
 async function loadBlockiesScript() {
-    if (typeof makeBlockie === 'function') return true;
+    if (typeof makeBlockie === 'function') {
+        console.log('Blockies library already loaded');
+        return true;
+    }
     return new Promise((resolve) => {
-        const primaryCDN = 'https://cdn.jsdelivr.net/npm/ethereum-blockies-base64@0.1.0/dist/ethereum-blockies-base64.min.js';
-        const fallbackCDN = 'https://unpkg.com/ethereum-blockies-base64@0.1.0/dist/ethereum-blockies-base64.min.js';
-        const script = document.createElement('script');
-        script.src = primaryCDN;
-        script.onload = () => resolve(true);
-        script.onerror = () => {
-            console.warn('Primary Blockies CDN failed, trying fallback CDN');
-            script.src = fallbackCDN;
-            script.onerror = () => {
-                console.error('Fallback Blockies CDN failed');
-                resolve(false);
-            };
+        const localScript = document.createElement('script');
+        localScript.src = 'js/ethereum-blockies-base64.min.js';
+        localScript.onload = () => {
+            console.log('Blockies loaded from local file');
+            resolve(true);
         };
-        document.head.appendChild(script);
+        localScript.onerror = () => {
+            console.warn('Local Blockies file failed, trying primary CDN');
+            const primaryCDN = 'https://cdn.jsdelivr.net/npm/ethereum-blockies-base64@0.1.0/dist/ethereum-blockies-base64.min.js';
+            const fallbackCDN = 'https://unpkg.com/ethereum-blockies-base64@0.1.0/dist/ethereum-blockies-base64.min.js';
+            const script = document.createElement('script');
+            script.src = primaryCDN;
+            script.onload = () => {
+                console.log('Blockies loaded from primary CDN');
+                resolve(true);
+            };
+            script.onerror = () => {
+                console.warn('Primary Blockies CDN failed, trying fallback CDN');
+                script.src = fallbackCDN;
+                script.onload = () => {
+                    console.log('Blockies loaded from fallback CDN');
+                    resolve(true);
+                };
+                script.onerror = () => {
+                    console.error('Fallback Blockies CDN failed');
+                    resolve(false);
+                };
+                document.head.appendChild(script);
+            };
+            document.head.appendChild(script);
+        };
+        document.head.appendChild(localScript);
     });
 }
 
@@ -396,22 +417,27 @@ async function populateDashboard() {
         const maxTotalAttempts = 50;
         for (let i = 0; i < Math.min(groupCount, 50); i++) {
             let attempts = 3;
+            let groupId = null;
             while (attempts > 0 && totalAttempts < maxTotalAttempts) {
                 totalAttempts++;
                 try {
-                    const groupId = await getContract().methods.userGroups(userAddress, i).call();
+                    groupId = await getContract().methods.userGroups(userAddress, i).call();
                     console.log(`Raw userGroups[${i}]:`, groupId);
                     if (groupId && parseInt(groupId) > 0 && groupId !== "0" && groupId !== "") {
                         groupIds.add(groupId);
                         console.log(`Added groupId ${groupId} at index ${i}`);
                         break;
                     } else {
-                        console.log(`Stopping userGroups scan at index ${i}: invalid groupId ${groupId}`);
+                        console.log(`Skipping userGroups[${i}]: invalid groupId ${groupId}`);
                         break;
                     }
                 } catch (error) {
-                    console.error(`Error fetching userGroups[${i}], attempt ${4 - attempts}:`, error);
+                    console.error(`Error fetching userGroups[${i}], attempt ${4 - attempts}:`, error.message, error);
                     attempts--;
+                    if (error.message.includes('execution reverted')) {
+                        console.log(`userGroups[${i}] reverted, likely invalid index or empty slot`);
+                        break;
+                    }
                     if (attempts === 0) {
                         console.log(`Stopping userGroups scan at index ${i} after failed attempts`);
                         break;
@@ -419,8 +445,8 @@ async function populateDashboard() {
                     await new Promise(resolve => setTimeout(resolve, 1000));
                 }
             }
-            if (attempts === 0 || totalAttempts >= maxTotalAttempts) {
-                console.log(`Exiting userGroups loop at index ${i}: ${attempts === 0 ? 'failed attempts' : 'max total attempts reached'}`);
+            if (attempts === 0 || totalAttempts >= maxTotalAttempts || groupId === null) {
+                console.log(`Exiting userGroups loop at index ${i}: ${attempts === 0 ? 'failed attempts' : groupId === null ? 'revert or invalid groupId' : 'max total attempts reached'}`);
                 break;
             }
             await new Promise(resolve => setTimeout(resolve, 500));
@@ -431,12 +457,20 @@ async function populateDashboard() {
             for (let i = 1; i <= groupCount && i <= 50; i++) {
                 try {
                     const result = await getContract().methods.getGroup(i).call();
+                    console.log(`Fallback scan group ${i} result:`, result);
+                    const name = result[0] || result.name || 'Unnamed Group';
                     const members = result[1] || result.members || [];
                     if (members && Array.isArray(members) && members.map(addr => addr.toLowerCase()).includes(userAddress.toLowerCase())) {
                         groupIds.add(i.toString());
+                        console.log(`Added groupId ${i} from fallback scan`);
+                    } else {
+                        console.log(`Group ${i} does not include user ${userAddress}`);
                     }
                 } catch (error) {
-                    console.error(`Error fetching group ${i} in fallback scan:`, error);
+                    console.error(`Error fetching group ${i} in fallback scan:`, error.message, error);
+                    if (error.message.includes('execution reverted')) {
+                        console.log(`Group ${i} reverted, likely does not exist`);
+                    }
                 }
                 await new Promise(resolve => setTimeout(resolve, 500));
             }
@@ -459,7 +493,6 @@ async function populateDashboard() {
                     console.warn(`Group ${groupId} has invalid members array:`, members);
                     continue;
                 }
-                // Pre-resolve all avatars
                 const groupBlockie = await createBlockie(groupId.toString(), 64);
                 const memberAvatars = await Promise.all(
                     members.map(async addr => {
@@ -475,7 +508,7 @@ async function populateDashboard() {
                 try {
                     const balanceData = await getContract().methods.getGroupBalances(groupId).call();
                     balMembers = balanceData[0] || balanceData.members || [];
-                    balances = balanceData[1] || balanceData.balances || [];
+                    balances = balanceData[1] || balanceData.bals || [];
                     console.log(`Group ${groupId} balances:`, { balMembers, balances });
                 } catch (error) {
                     console.error(`Error fetching balances for group ${groupId}:`, error);
@@ -695,22 +728,27 @@ async function populateGroupDropdown() {
         const maxTotalAttempts = 50;
         for (let i = 0; i < Math.min(groupCount, 50); i++) {
             let attempts = 3;
+            let groupId = null;
             while (attempts > 0 && totalAttempts < maxTotalAttempts) {
                 totalAttempts++;
                 try {
-                    const groupId = await getContract().methods.userGroups(userAddress, i).call();
+                    groupId = await getContract().methods.userGroups(userAddress, i).call();
                     console.log(`Raw userGroups[${i}]:`, groupId);
                     if (groupId && parseInt(groupId) > 0 && groupId !== "0" && groupId !== "") {
                         groupIds.add(groupId);
                         console.log(`Added groupId ${groupId} at index ${i}`);
                         break;
                     } else {
-                        console.log(`Stopping userGroups scan at index ${i}: invalid groupId ${groupId}`);
+                        console.log(`Skipping userGroups[${i}]: invalid groupId ${groupId}`);
                         break;
                     }
                 } catch (error) {
-                    console.error(`Error fetching userGroups[${i}], attempt ${4 - attempts}:`, error);
+                    console.error(`Error fetching userGroups[${i}], attempt ${4 - attempts}:`, error.message, error);
                     attempts--;
+                    if (error.message.includes('execution reverted')) {
+                        console.log(`userGroups[${i}] reverted, likely invalid index or empty slot`);
+                        break;
+                    }
                     if (attempts === 0) {
                         console.log(`Stopping userGroups scan at index ${i} after failed attempts`);
                         break;
@@ -718,8 +756,8 @@ async function populateGroupDropdown() {
                     await new Promise(resolve => setTimeout(resolve, 1000));
                 }
             }
-            if (attempts === 0 || totalAttempts >= maxTotalAttempts) {
-                console.log(`Exiting userGroups loop at index ${i}: ${attempts === 0 ? 'failed attempts' : 'max total attempts reached'}`);
+            if (attempts === 0 || totalAttempts >= maxTotalAttempts || groupId === null) {
+                console.log(`Exiting userGroups loop at index ${i}: ${attempts === 0 ? 'failed attempts' : groupId === null ? 'revert or invalid groupId' : 'max total attempts reached'}`);
                 break;
             }
             await new Promise(resolve => setTimeout(resolve, 500));
@@ -730,12 +768,20 @@ async function populateGroupDropdown() {
             for (let i = 1; i <= groupCount && i <= 50; i++) {
                 try {
                     const result = await getContract().methods.getGroup(i).call();
+                    console.log(`Fallback scan group ${i} result:`, result);
+                    const name = result[0] || result.name || 'Unnamed Group';
                     const members = result[1] || result.members || [];
                     if (members && Array.isArray(members) && members.map(addr => addr.toLowerCase()).includes(userAddress.toLowerCase())) {
                         groupIds.add(i.toString());
+                        console.log(`Added groupId ${i} from fallback scan`);
+                    } else {
+                        console.log(`Group ${i} does not include user ${userAddress}`);
                     }
                 } catch (error) {
-                    console.error(`Error fetching group ${i} in fallback scan:`, error);
+                    console.error(`Error fetching group ${i} in fallback scan:`, error.message, error);
+                    if (error.message.includes('execution reverted')) {
+                        console.log(`Group ${i} reverted, likely does not exist`);
+                    }
                 }
                 await new Promise(resolve => setTimeout(resolve, 500));
             }
