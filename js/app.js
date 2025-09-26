@@ -169,21 +169,21 @@ async function initWeb3(rpcIndex = 0, maxRetries = 3) {
     console.log('Initializing Web3 for', isMobileDevice() ? 'mobile' : 'desktop');
     if (!window.ethereum) {
         const message = isMobileDevice()
-            ? 'Please open this page in the MetaMask in-app browser or ensure MetaMask is installed and accessible. Alternatively, tap here to open in MetaMask: <a href="metamask://">Open MetaMask</a>'
+            ? 'Please open this page in the MetaMask in-app browser or ensure MetaMask is installed and accessible. <a href="metamask://dapp/www.splitbillez.com">Open in MetaMask</a>'
             : 'MetaMask is not installed. Please install MetaMask and refresh the page.';
         alert(message);
         console.error('MetaMask not detected:', message);
         if (isMobileDevice()) {
-            document.body.innerHTML += `<div style="text-align: center; margin-top: 20px;"><a href="metamask://">Open in MetaMask</a></div>`;
+            document.body.innerHTML += `<div style="text-align: center; margin-top: 20px;"><a href="metamask://dapp/www.splitbillez.com">Open in MetaMask</a></div>`;
         }
         return false;
     }
     try {
-        // Prioritize window.ethereum for both desktop and mobile
+        // Use window.ethereum as the primary provider
         web3 = new Web3(window.ethereum);
         console.log('Web3 initialized with window.ethereum:', !!web3, 'Version:', Web3.version);
 
-        // Retry logic for chain switch
+        // Switch to Shardeum Unstable Testnet
         let chainSwitchAttempts = 0;
         const maxChainSwitchAttempts = 3;
         while (chainSwitchAttempts < maxChainSwitchAttempts) {
@@ -216,7 +216,7 @@ async function initWeb3(rpcIndex = 0, maxRetries = 3) {
             }
         }
 
-        // Request accounts with retry
+        // Request accounts
         let accountAttempts = 0;
         while (accountAttempts < maxRetries) {
             try {
@@ -242,7 +242,7 @@ async function initWeb3(rpcIndex = 0, maxRetries = 3) {
         console.log('Contract initialized:', !!contract);
         await updateUI();
 
-        // Fallback to HTTP provider if transaction fails later
+        // Fallback to HTTP provider if MetaMask fails
         window.ethereum.on('error', async (error) => {
             console.error('MetaMask provider error:', error);
             if (rpcIndex < RPC_URLS.length - 1) {
@@ -407,7 +407,7 @@ async function checkMetaMaskConnection() {
     try {
         if (!window.ethereum) {
             const message = isMobileDevice()
-                ? 'Please open this page in the MetaMask in-app browser or ensure MetaMask is installed and accessible. <a href="metamask://">Open in MetaMask</a>'
+                ? 'Please open this page in the MetaMask in-app browser or ensure MetaMask is installed and accessible. <a href="metamask://dapp/www.splitbillez.com">Open in MetaMask</a>'
                 : 'MetaMask not detected. Please install MetaMask and refresh.';
             console.log(message);
             if (document.getElementById('dashboardContent')) {
@@ -416,7 +416,7 @@ async function checkMetaMaskConnection() {
                 document.getElementById('expenseMessage').innerHTML = message;
             }
             if (isMobileDevice()) {
-                document.body.innerHTML += `<div style="text-align: center; margin-top: 20px;"><a href="metamask://">Open in MetaMask</a></div>`;
+                document.body.innerHTML += `<div style="text-align: center; margin-top: 20px;"><a href="metamask://dapp/www.splitbillez.com">Open in MetaMask</a></div>`;
             }
             return;
         }
@@ -760,14 +760,14 @@ async function populateDashboard() {
                         const tx = await getContract().methods.settleDebt(settleGroupId, toAddress, amount).send({
                             from: await getAccount(),
                             value: '0',
-                            type: '0x0'
+                            gasPrice: web3.utils.toWei('50', 'gwei')
                         });
                         settleMessage.textContent = `Debt settled! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`;
                         this.reset();
                         await populateDashboard();
                     } catch (error) {
                         console.error(`Debt settlement error for group ${settleGroupId}:`, error);
-                        settleMessage.textContent = 'Error: ' + (error.message.includes('Eip1559NotSupportedError') ? 'Network does not support EIP-1559. Try again.' : error.message.includes('revert') ? 'Invalid input or contract revert. Check inputs and try again.' : error.message);
+                        settleMessage.textContent = 'Error: ' + (error.message.includes('revert') ? 'Invalid input or contract revert. Check inputs and try again.' : error.message);
                     }
                 });
             } catch (error) {
@@ -880,7 +880,7 @@ async function populateGroupDropdown() {
                     console.log(`Raw userGroups[${i}]:`, groupId);
                     if (groupId && parseInt(groupId) > 0 && groupId !== "0" && groupId !== "") {
                         groupIds.add(groupId);
-                        console.log(`Added groupId ${i} at index ${i}`);
+                        console.log(`Added groupId ${groupId} at index ${i}`);
                         break;
                     } else {
                         console.log(`Skipping userGroups[${i}]: invalid groupId ${groupId}`);
@@ -1092,7 +1092,7 @@ async function handleExpenseFormSubmit(e) {
             const tx = await getContract().methods.createGroup(groupName, members).send({
                 from: await getAccount(),
                 value: '0',
-                type: '0x0'
+                gasPrice: web3.utils.toWei('50', 'gwei')
             });
             expenseMessage.textContent = `Group created! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`;
             console.log('Group created, tx:', tx.transactionHash);
@@ -1104,7 +1104,7 @@ async function handleExpenseFormSubmit(e) {
             document.getElementById('groupId').value = parseInt(groupCount);
         } catch (error) {
             console.error('Group creation error:', error);
-            expenseMessage.textContent = 'Error: ' + (error.message.includes('Eip1559NotSupportedError') ? 'Network does not support EIP-1559. Try again.' : error.message.includes('revert') ? 'Invalid input or contract revert. Check addresses and try again.' : error.message);
+            expenseMessage.textContent = 'Error: ' + (error.message.includes('revert') ? 'Invalid input or contract revert. Check addresses and try again.' : error.message);
         }
         return;
     }
@@ -1155,9 +1155,7 @@ async function handleExpenseFormSubmit(e) {
         tx = await getContract().methods.addExpense(groupId, description, amount, splitType, customShares).send({
             from: await getAccount(),
             value: '0',
-            type: '0x2', // Use EIP-1559 transaction type
-            maxPriorityFeePerGas: web3.utils.toWei('2', 'gwei'),
-            maxFeePerGas: web3.utils.toWei('100', 'gwei')
+            gasPrice: web3.utils.toWei('50', 'gwei')
         });
         expenseMessage.textContent = `Expense added! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`;
         console.log('Expense added, tx:', tx.transactionHash);
@@ -1165,8 +1163,8 @@ async function handleExpenseFormSubmit(e) {
         await populateDashboard();
     } catch (error) {
         console.error('Expense submission error:', error);
+        expenseMessage.textContent = 'Error: ' + (error.message.includes('Failed to check for transaction receipt') || error.message.includes('network error') ? 'Failed to connect to Shardeum RPC. Please check your network and try again.' : error.message.includes('revert') ? 'Invalid input or contract revert. Check inputs and try again.' : error.message);
         if (error.message.includes('Failed to check for transaction receipt') || error.message.includes('network error')) {
-            expenseMessage.textContent = 'Network error: Unable to connect to Shardeum RPC. Switching to fallback RPC...';
             if (RPC_URLS.indexOf(web3.currentProvider.host) < RPC_URLS.length - 1) {
                 const nextRpcIndex = RPC_URLS.indexOf(web3.currentProvider.host) + 1;
                 console.log(`Retrying with fallback RPC: ${RPC_URLS[nextRpcIndex]}`);
@@ -1176,9 +1174,7 @@ async function handleExpenseFormSubmit(e) {
                     tx = await getContract().methods.addExpense(groupId, description, amount, splitType, customShares).send({
                         from: await getAccount(),
                         value: '0',
-                        type: '0x2',
-                        maxPriorityFeePerGas: web3.utils.toWei('2', 'gwei'),
-                        maxFeePerGas: web3.utils.toWei('100', 'gwei')
+                        gasPrice: web3.utils.toWei('50', 'gwei')
                     });
                     expenseMessage.textContent = `Expense added! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`;
                     console.log('Expense added with fallback RPC, tx:', tx.transactionHash);
@@ -1190,25 +1186,6 @@ async function handleExpenseFormSubmit(e) {
                 }
             } else {
                 expenseMessage.textContent = 'Error: All RPC endpoints failed. Please check your network and try again.';
-            }
-        } else {
-            expenseMessage.textContent = 'Error: ' + (error.message.includes('Eip1559NotSupportedError') ? 'Network does not support EIP-1559. Trying legacy transaction...' : error.message.includes('revert') ? 'Invalid input or contract revert. Check inputs and try again.' : error.message);
-            if (error.message.includes('Eip1559NotSupportedError')) {
-                try {
-                    tx = await getContract().methods.addExpense(groupId, description, amount, splitType, customShares).send({
-                        from: await getAccount(),
-                        value: '0',
-                        gasPrice: web3.utils.toWei('50', 'gwei'),
-                        type: '0x0'
-                    });
-                    expenseMessage.textContent = `Expense added! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`;
-                    console.log('Expense added with legacy transaction, tx:', tx.transactionHash);
-                    e.target.reset();
-                    await populateDashboard();
-                } catch (legacyError) {
-                    console.error('Legacy transaction failed:', legacyError);
-                    expenseMessage.textContent = 'Error: Failed to add expense with legacy transaction. Please try again.';
-                }
             }
         }
     }
