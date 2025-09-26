@@ -79,12 +79,14 @@
             const settleGroupSelect = document.getElementById('settleGroupId');
             const settleToSelect = document.getElementById('settleTo');
             const settleDebtForm = document.getElementById('settleDebtForm');
+            const settleMessage = document.getElementById('settleMessage');
             dashboardContent.innerHTML = '<p>Loading groups...</p>';
             settleGroupSelect.innerHTML = '<option value="" disabled selected>Loading groups...</option>';
             if (!window.getContract() || !window.getAccount()) {
                 dashboardContent.innerHTML = '<p>Please connect MetaMask to view your groups.</p>';
                 settleGroupSelect.innerHTML = '<option value="" disabled selected>Connect wallet first</option>';
                 settleDebtForm.style.display = 'none';
+                settleMessage.textContent = 'Please connect MetaMask to manage debts.';
                 return;
             }
             try {
@@ -92,36 +94,56 @@
                 console.log('Fetching groups for dashboard:', userAddress); // Debug log
                 const groupIds = [];
                 for (let i = 0; i < 50; i++) {
-                    try {
-                        const groupId = await window.getContract().methods.userGroups(userAddress, i).call();
-                        console.log(`userGroups[${i}]:`, groupId); // Debug log
-                        if (parseInt(groupId) >= 0 && groupId !== "") {
-                            groupIds.push(groupId);
-                        } else {
-                            break;
+                    let attempts = 3;
+                    while (attempts > 0) {
+                        try {
+                            const groupId = await window.getContract().methods.userGroups(userAddress, i).call();
+                            console.log(`userGroups[${i}]:`, groupId); // Debug log
+                            if (parseInt(groupId) >= 0 && groupId !== "" && groupId !== "0") {
+                                groupIds.push(groupId);
+                            }
+                            break; // Success, exit retry loop
+                        } catch (error) {
+                            console.error(`Error fetching userGroups[${i}], attempt ${4 - attempts}:`, error);
+                            attempts--;
+                            if (attempts === 0) break; // Exit on final failure
+                            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
                         }
-                    } catch (error) {
-                        console.error(`Error fetching userGroups[${i}]:`, error);
-                        break;
                     }
+                    if (attempts === 0) break; // Stop if last attempt failed
                 }
                 console.log('Dashboard group IDs:', groupIds); // Debug log
                 if (groupIds.length === 0) {
                     dashboardContent.innerHTML = '<p>No groups found. Create one in the Add Expense page.</p>';
                     settleGroupSelect.innerHTML = '<option value="" disabled selected>No groups found</option>';
                     settleDebtForm.style.display = 'none';
+                    settleMessage.textContent = 'No groups found. Create one to manage debts.';
                     return;
                 }
                 dashboardContent.innerHTML = '';
                 settleGroupSelect.innerHTML = '<option value="" disabled selected>Select a group</option>';
                 settleDebtForm.style.display = 'block';
+                settleMessage.textContent = '';
                 for (let groupId of groupIds) {
                     try {
-                        const [name, members] = await window.getContract().methods.getGroup(groupId).call();
-                        console.log(`Group ${groupId} details:`, { name, members }); // Debug log
+                        const result = await window.getContract().methods.getGroup(groupId).call();
+                        console.log(`Group ${groupId} result:`, result); // Debug log
+                        const name = result[0] || result.name || 'Unnamed Group';
+                        const members = result[1] || result.members || [];
+                        if (!members || !Array.isArray(members)) {
+                            console.warn(`Group ${groupId} has invalid members array:`, members);
+                            continue;
+                        }
                         // Fetch group balances
-                        const [balMembers, balances] = await window.getContract().methods.getGroupBalances(groupId).call();
-                        console.log(`Group ${groupId} balances:`, { balMembers, balances }); // Debug log
+                        let balMembers = [], balances = [];
+                        try {
+                            const balanceData = await window.getContract().methods.getGroupBalances(groupId).call();
+                            balMembers = balanceData[0] || balanceData.members || [];
+                            balances = balanceData[1] || balanceData.balances || [];
+                            console.log(`Group ${groupId} balances:`, { balMembers, balances }); // Debug log
+                        } catch (error) {
+                            console.error(`Error fetching balances for group ${groupId}:`, error);
+                        }
                         // Fetch expenses
                         const expenseCount = await window.getContract().methods.expenseCount().call();
                         const expenses = [];
@@ -152,9 +174,9 @@
                                 <p>Expense ${exp.id}: ${exp.description} - ${exp.amount} SHM (Payer: ${memberNames[exp.payer.toLowerCase()] || exp.payer.slice(0, 6) + '...'}, Split: ${exp.splitType})</p>
                             `).join('') : '<p>No expenses found.</p>'}
                             <h4>Balances:</h4>
-                            ${balMembers.map((addr, i) => `
-                                <p>${memberNames[addr.toLowerCase()] || addr.slice(0, 6) + '...'}: ${parseFloat(window.web3().utils.fromWei(balances[i], 'ether')).toFixed(2)} SHM</p>
-                            `).join('')}
+                            ${balMembers.length > 0 ? balMembers.map((addr, i) => `
+                                <p>${memberNames[addr.toLowerCase()] || addr.slice(0, 6) + '...'}: ${parseFloat(window.web3().utils.fromWei(balances[i] || '0', 'ether')).toFixed(2)} SHM</p>
+                            `).join('') : '<p>No balances available.</p>'}
                         `;
                         dashboardContent.appendChild(groupDiv);
                         // Add group to settle debt dropdown
@@ -163,7 +185,7 @@
                         option.textContent = `${name} (ID: ${groupId})`;
                         settleGroupSelect.appendChild(option);
                     } catch (error) {
-                        console.error(`Error fetching group ${groupId}:`, error);
+                        console.error(`Error processing group ${groupId}:`, error);
                     }
                 }
                 // Update settleTo dropdown when group is selected
@@ -171,7 +193,8 @@
                     settleToSelect.innerHTML = '<option value="" disabled selected>Select a member</option>';
                     if (this.value) {
                         try {
-                            const [_, members] = await window.getContract().methods.getGroup(this.value).call();
+                            const result = await window.getContract().methods.getGroup(this.value).call();
+                            const members = result[1] || result.members || [];
                             for (let addr of members) {
                                 if (addr.toLowerCase() !== userAddress.toLowerCase()) {
                                     const option = document.createElement('option');
@@ -191,6 +214,7 @@
                 dashboardContent.innerHTML = '<p>Error loading groups. Please try again.</p>';
                 settleGroupSelect.innerHTML = '<option value="" disabled selected>Error loading groups</option>';
                 settleDebtForm.style.display = 'none';
+                settleMessage.textContent = 'Error loading groups. Please try again.';
             }
         }
 

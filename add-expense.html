@@ -65,6 +65,7 @@
                 <button type="button" id="createGroupBtn" onclick="showGroupCreation()">Create Group</button>
                 <button type="submit">Add Expense</button>
             </form>
+            <p id="expenseMessage"></p>
         </section>
     </main>
     <footer>
@@ -96,11 +97,13 @@
             const groupSelect = document.getElementById('groupId');
             const groupCreationDiv = document.getElementById('groupCreation');
             const createGroupBtn = document.getElementById('createGroupBtn');
+            const expenseMessage = document.getElementById('expenseMessage');
             groupSelect.innerHTML = '<option value="" disabled selected>Loading groups...</option>';
             if (!window.getContract() || !window.getAccount()) {
                 groupSelect.innerHTML = '<option value="" disabled selected>Connect wallet first</option>';
                 groupCreationDiv.style.display = 'none';
                 createGroupBtn.style.display = 'block';
+                expenseMessage.textContent = 'Please connect MetaMask to view groups.';
                 return;
             }
             try {
@@ -112,19 +115,27 @@
                     userAddressInput.value = userAddress;
                 }
                 const groupIds = [];
+                // Retry logic for RPC errors
                 for (let i = 0; i < 50; i++) {
-                    try {
-                        const groupId = await window.getContract().methods.userGroups(userAddress, i).call();
-                        console.log(`userGroups[${i}]:`, groupId); // Debug log
-                        if (parseInt(groupId) >= 0 && groupId !== "") {
-                            groupIds.push(groupId);
-                        } else {
-                            break;
+                    let attempts = 3;
+                    while (attempts > 0) {
+                        try {
+                            const groupId = await window.getContract().methods.userGroups(userAddress, i).call();
+                            console.log(`userGroups[${i}]:`, groupId); // Debug log
+                            if (parseInt(groupId) >= 0 && groupId !== "" && groupId !== "0") {
+                                groupIds.push(groupId);
+                            } else {
+                                break;
+                            }
+                            break; // Success, exit retry loop
+                        } catch (error) {
+                            console.error(`Error fetching userGroups[${i}], attempt ${4 - attempts}:`, error);
+                            attempts--;
+                            if (attempts === 0) break; // Exit on final failure
+                            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
                         }
-                    } catch (error) {
-                        console.error(`Error fetching userGroups[${i}]:`, error);
-                        break;
                     }
+                    if (attempts === 0) break; // Stop if last attempt failed
                 }
                 console.log('Found group IDs:', groupIds); // Debug log
                 groupSelect.innerHTML = '<option value="" disabled selected>Select a group</option>';
@@ -132,13 +143,16 @@
                     groupSelect.innerHTML += '<option value="create">Create a new group</option>';
                     groupCreationDiv.style.display = 'block';
                     createGroupBtn.style.display = 'block';
+                    expenseMessage.textContent = 'No groups found. Create one to add expenses.';
                 } else {
                     groupCreationDiv.style.display = 'none';
                     createGroupBtn.style.display = 'block';
+                    expenseMessage.textContent = '';
                     for (let groupId of groupIds) {
                         try {
-                            const [name] = await window.getContract().methods.getGroup(groupId).call();
-                            console.log(`Group ${groupId} name:`, name); // Debug log
+                            const result = await window.getContract().methods.getGroup(groupId).call();
+                            console.log(`Group ${groupId} result:`, result); // Debug log
+                            const name = result[0] || result.name || 'Unnamed Group';
                             const option = document.createElement('option');
                             option.value = groupId;
                             option.textContent = `${name} (ID: ${groupId})`;
@@ -157,6 +171,7 @@
                 groupSelect.innerHTML = '<option value="" disabled selected>Error loading groups</option><option value="create">Create a new group</option>';
                 groupCreationDiv.style.display = 'block';
                 createGroupBtn.style.display = 'block';
+                expenseMessage.textContent = 'Error loading groups. Please try again.';
             }
             // Listen for group selection changes
             groupSelect.addEventListener('change', function() {
@@ -191,7 +206,7 @@
 
         function removeMember(button) {
             const memberInputs = document.getElementById('memberInputs');
-            if (memberInputs.children.length > 2) { // Allow removal only if more than user + one member
+            if (memberInputs.children.length > 2) {
                 button.parentElement.remove();
                 updateRemoveButtons();
             } else {
@@ -273,8 +288,9 @@
                 return;
             }
             const groupId = document.getElementById('groupId').value;
+            const expenseMessage = document.getElementById('expenseMessage');
             if (!groupId || groupId === 'create') {
-                alert('Please select an existing group or create a new one first.');
+                expenseMessage.textContent = 'Please select an existing group or create a new one first.';
                 return;
             }
             const description = document.getElementById('description').value;
@@ -283,7 +299,7 @@
             try {
                 amount = window.web3().utils.toWei(amountInput, 'ether');
             } catch (error) {
-                alert('Invalid amount format. Please enter a valid number.');
+                expenseMessage.textContent = 'Invalid amount format. Please enter a valid number.';
                 return;
             }
             const splitType = document.getElementById('split').value;
@@ -293,16 +309,16 @@
                     customShares = document.getElementById('customShares').value.split(',').map(s => parseInt(s.trim()));
                     const total = customShares.reduce((sum, val) => sum + val, 0);
                     if (total !== 100) {
-                        alert('Custom shares must sum to 100%');
+                        expenseMessage.textContent = 'Custom shares must sum to 100%';
                         return;
                     }
                     const [_, members] = await window.getContract().methods.getGroup(groupId).call();
                     if (customShares.length !== members.length) {
-                        alert(`Custom shares count (${customShares.length}) must match group members (${members.length}).`);
+                        expenseMessage.textContent = `Custom shares count (${customShares.length}) must match group members (${members.length}).`;
                         return;
                     }
                 } catch (error) {
-                    alert('Invalid custom shares format. Use comma-separated percentages (e.g., 40,30,30).');
+                    expenseMessage.textContent = 'Invalid custom shares format. Use comma-separated percentages (e.g., 40,30,30).';
                     return;
                 }
             }
@@ -312,13 +328,14 @@
                     value: '0',
                     type: '0x0' // Use legacy transaction
                 });
-                alert(`Expense added! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`);
+                expenseMessage.textContent = `Expense added! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`;
                 this.reset();
                 customInput.style.display = 'none';
                 customLabel.style.display = 'none';
                 await populateGroupDropdown();
             } catch (error) {
-                alert('Error: ' + (error.message.includes('Eip1559NotSupportedError') ? 'Network does not support EIP-1559. Try again.' : error.message.includes('revert') ? 'Invalid input or contract revert. Check group ID and try again.' : error.message));
+                console.error('Expense error:', error);
+                expenseMessage.textContent = 'Error: ' + (error.message.includes('Eip1559NotSupportedError') ? 'Network does not support EIP-1559. Try again.' : error.message.includes('revert') ? 'Invalid input or contract revert. Check group ID and try again.' : error.message);
             }
         });
     </script>
