@@ -895,7 +895,10 @@ async function handleExpenseFormSubmit(e) {
     const expenseMessage = document.getElementById('expenseMessage');
     const submitButton = document.getElementById('submitButton');
     const groupCreationDiv = document.getElementById('groupCreation');
-    if (!expenseMessage || !submitButton || !groupCreationDiv) return;
+    if (!expenseMessage || !submitButton || !groupCreationDiv) {
+        console.error('Required form elements not found');
+        return;
+    }
     if (groupId === 'create') {
         const groupName = document.getElementById('groupName').value;
         const memberInputs = document.getElementsByClassName('member-input');
@@ -903,13 +906,14 @@ async function handleExpenseFormSubmit(e) {
             expenseMessage.textContent = 'Please enter a group name.';
             return;
         }
+        const members = [];
+        const newMemberNames = {};
         try {
-            const members = [];
-            const newMemberNames = {};
+            const userAddress = (await getAccount()).toLowerCase();
             Array.from(memberInputs).forEach(input => {
                 const address = input.querySelector('.member-address').value.trim().toLowerCase();
                 const name = input.querySelector('.member-name').value.trim();
-                if (web3.utils.isAddress(address) || address === (await getAccount()).toLowerCase()) {
+                if (web3.utils.isAddress(address) || address === userAddress) {
                     members.push(address);
                     if (name) newMemberNames[address] = name;
                 }
@@ -920,7 +924,6 @@ async function handleExpenseFormSubmit(e) {
                 expenseMessage.textContent = 'Please include at least two valid Ethereum addresses (including yours).';
                 return;
             }
-            const userAddress = (await getAccount()).toLowerCase();
             if (!members.includes(userAddress)) {
                 expenseMessage.textContent = 'Your address is missing from the member list.';
                 return;
@@ -939,12 +942,11 @@ async function handleExpenseFormSubmit(e) {
             await populateGroupDropdown();
             const groupCount = await getContract().methods.groupCount().call();
             document.getElementById('groupId').value = parseInt(groupCount) - 1;
-            return;
         } catch (error) {
             console.error('Group creation error:', error);
             expenseMessage.textContent = 'Error: ' + (error.message.includes('Eip1559NotSupportedError') ? 'Network does not support EIP-1559. Try again.' : error.message.includes('revert') ? 'Invalid input or contract revert. Check addresses and try again.' : error.message);
-            return;
         }
+        return;
     }
     if (!groupId) {
         expenseMessage.textContent = 'Please select a group.';
@@ -958,6 +960,7 @@ async function handleExpenseFormSubmit(e) {
         const shmAmount = parseFloat(amountInput) / shmPrice[currency.toLowerCase()];
         amount = web3.utils.toWei(shmAmount.toString(), 'ether');
     } catch (error) {
+        console.error('Error converting amount:', error);
         expenseMessage.textContent = 'Invalid amount format or SHM price not loaded. Please try again.';
         return;
     }
@@ -968,7 +971,7 @@ async function handleExpenseFormSubmit(e) {
             customShares = document.getElementById('customShares').value.split(',').map(s => parseInt(s.trim()));
             const total = customShares.reduce((sum, val) => sum + val, 0);
             if (total !== 100) {
-                expenseMessage.textContent = 'Custom shares must sum to 100%';
+                expenseMessage.textContent = 'Custom shares must sum to 100%.';
                 return;
             }
             const [_, members] = await getContract().methods.getGroup(groupId).call();
@@ -977,6 +980,7 @@ async function handleExpenseFormSubmit(e) {
                 return;
             }
         } catch (error) {
+            console.error('Error processing custom shares:', error);
             expenseMessage.textContent = 'Invalid custom shares format. Use comma-separated percentages (e.g., 40,30,30).';
             return;
         }
@@ -1028,5 +1032,6 @@ window.initExpenseForm = initExpenseForm;
 
 // Initialize form listener on load
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOMContentLoaded fired, initializing expense form');
     initExpenseForm();
 });
