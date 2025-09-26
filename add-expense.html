@@ -6,9 +6,10 @@
     <title>Add Expense - SplitBillEz</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="icon" href="images/splitbillez_favicon.png">
-    <script src="https://cdn.jsdelivr.net/npm/web3@latest/dist/web3.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/web3@4.16.0/dist/web3.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ethereum-blockies-base64@0.1.0/dist/ethereum-blockies-base64.min.js"></script>
 </head>
-<body onload="initWeb3().then(populateGroupDropdown)">
+<body onload="checkMetaMaskConnection()">
     <header>
         <div class="header-container">
             <img src="images/splitbillez_logo.png" alt="SplitBillEz Logo" class="logo">
@@ -17,7 +18,7 @@
                 <a href="dashboard.html">Dashboard</a>
                 <a href="add-expense.html">Add Expense</a>
             </nav>
-            <button class="metamask-button" onclick="handleMetaMaskToggle()">Connect with MetaMask</button>
+            <button class="metamask-button" onclick="handleMetaMaskToggle().then(() => populateGroupDropdown())">Connect with MetaMask</button>
         </div>
     </header>
     <main>
@@ -26,8 +27,15 @@
             <form id="expenseForm">
                 <label for="description">Description:</label>
                 <input type="text" id="description" placeholder="e.g., Dinner at Restaurant" required>
-                <label for="amount">Amount (SHM):</label>
+                <label for="currency">Currency:</label>
+                <select id="currency" required>
+                    <option value="EUR">EUR</option>
+                    <option value="USD">USD</option>
+                    <option value="INR">INR</option>
+                </select>
+                <label for="amount">Amount:</label>
                 <input type="number" id="amount" placeholder="e.g., 100" step="0.01" required>
+                <p id="shmAmount">SHM Amount: Calculating...</p>
                 <label for="split">Split Type:</label>
                 <select id="split" required>
                     <option value="equal">Equal</option>
@@ -88,13 +96,71 @@
     </footer>
     <script src="js/app.js"></script>
     <script>
+        let shmPrice = null;
+
+        async function fetchShmPrice() {
+            try {
+                const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=shardeum&vs_currencies=eur,usd,inr');
+                const data = await response.json();
+                shmPrice = data.shardeum || { eur: 0, usd: 0, inr: 0 };
+                console.log('Fetched SHM price:', shmPrice);
+                updateShmAmount();
+            } catch (error) {
+                console.error('Error fetching SHM price:', error);
+                document.getElementById('shmAmount').textContent = 'Error fetching SHM price. Using default.';
+                shmPrice = { eur: 0, usd: 0, inr: 0 };
+            }
+        }
+
+        function updateShmAmount() {
+            const amountInput = document.getElementById('amount').value;
+            const currency = document.getElementById('currency').value;
+            if (!shmPrice || !amountInput) {
+                document.getElementById('shmAmount').textContent = 'SHM Amount: Enter amount and select currency';
+                return;
+            }
+            const amount = parseFloat(amountInput);
+            const shmAmount = amount / shmPrice[currency.toLowerCase()];
+            document.getElementById('shmAmount').textContent = `SHM Amount: ${shmAmount.toFixed(4)} SHM`;
+        }
+
+        async function checkMetaMaskConnection() {
+            console.log('Checking MetaMask connection on page load...');
+            try {
+                if (window.ethereum) {
+                    console.log('MetaMask provider detected');
+                    if (!window.web3 || !window.web3.utils) {
+                        console.log('Initializing Web3...');
+                        await window.initWeb3();
+                    }
+                    const account = await window.getAccount();
+                    console.log('MetaMask connected on load:', account);
+                    if (account) {
+                        document.getElementById('userAddress').value = account;
+                        await fetchShmPrice();
+                        await populateGroupDropdown();
+                    } else {
+                        console.log('No account connected, waiting for user to connect MetaMask');
+                        document.getElementById('expenseMessage').textContent = 'Please connect MetaMask to load groups.';
+                    }
+                } else {
+                    console.log('MetaMask not detected');
+                    document.getElementById('expenseMessage').textContent = 'MetaMask not detected. Please install MetaMask and refresh.';
+                }
+            } catch (error) {
+                console.error('Error checking MetaMask connection:', error);
+                document.getElementById('expenseMessage').textContent = 'Error checking MetaMask connection: ' + error.message + '. Please refresh and reconnect MetaMask.';
+            }
+        }
+
         async function populateGroupDropdown() {
             const groupSelect = document.getElementById('groupId');
             const groupCreationDiv = document.getElementById('groupCreation');
             const submitButton = document.getElementById('submitButton');
             const expenseMessage = document.getElementById('expenseMessage');
             groupSelect.innerHTML = '<option value="" disabled selected>Loading groups...</option>';
-            if (!window.getContract() || !window.getAccount()) {
+            if (!window.web3 || !window.web3.utils || !window.getContract() || !window.getAccount()) {
+                console.error('Web3.js, contract, or account not initialized');
                 groupSelect.innerHTML = '<option value="" disabled selected>Connect wallet first</option>';
                 groupCreationDiv.style.display = 'none';
                 submitButton.textContent = 'Add Expense';
@@ -102,7 +168,7 @@
                 return;
             }
             try {
-                const userAddress = window.getAccount();
+                const userAddress = await window.getAccount();
                 console.log('Fetching groups for:', userAddress);
                 document.getElementById('userAddress').value = userAddress;
                 const groupIds = [];
@@ -114,12 +180,18 @@
                             console.log(`userGroups[${i}]:`, groupId);
                             if (parseInt(groupId) >= 0 && groupId !== "" && groupId !== "0") {
                                 groupIds.push(groupId);
+                            } else {
+                                console.log(`Stopping at index ${i}: invalid groupId ${groupId}`);
+                                attempts = 0; // Break loop on invalid groupId
                             }
                             break;
                         } catch (error) {
                             console.error(`Error fetching userGroups[${i}], attempt ${4 - attempts}:`, error);
                             attempts--;
-                            if (attempts === 0) break;
+                            if (attempts === 0) {
+                                console.log(`Stopping at index ${i} after failed attempts`);
+                                break;
+                            }
                             await new Promise(resolve => setTimeout(resolve, 1000));
                         }
                     }
@@ -210,7 +282,7 @@
 
         document.getElementById('expenseForm').addEventListener('submit', async function(e) {
             e.preventDefault();
-            if (!window.web3() || !window.getContract() || !window.getAccount()) {
+            if (!window.web3 || !window.web3.utils || !window.getContract() || !window.getAccount()) {
                 alert('Web3 not initialized or wallet not connected. Please ensure MetaMask is installed and connected.');
                 return;
             }
@@ -231,7 +303,7 @@
                     Array.from(memberInputs).forEach(input => {
                         const address = input.querySelector('.member-address').value.trim().toLowerCase();
                         const name = input.querySelector('.member-name').value.trim();
-                        if (address.match(/^0x[a-f0-9]{40}$/) || address === window.getAccount().toLowerCase()) {
+                        if (window.web3.utils.isAddress(address) || address === (await window.getAccount()).toLowerCase()) {
                             members.push(address);
                             if (name) newMemberNames[address] = name;
                         }
@@ -242,16 +314,15 @@
                         expenseMessage.textContent = 'Please include at least two valid Ethereum addresses (including yours).';
                         return;
                     }
-                    const userAddress = window.getAccount().toLowerCase();
+                    const userAddress = (await window.getAccount()).toLowerCase();
                     if (!members.includes(userAddress)) {
                         expenseMessage.textContent = 'Your address is missing from the member list.';
                         return;
                     }
-                    // Save member names to localStorage
                     const existingNames = JSON.parse(localStorage.getItem('memberNames') || '{}');
                     localStorage.setItem('memberNames', JSON.stringify({ ...existingNames, ...newMemberNames }));
                     const tx = await window.getContract().methods.createGroup(groupName, members).send({
-                        from: window.getAccount(),
+                        from: await window.getAccount(),
                         value: '0',
                         type: '0x0'
                     });
@@ -275,11 +346,13 @@
             }
             const description = document.getElementById('description').value;
             const amountInput = document.getElementById('amount').value;
+            const currency = document.getElementById('currency').value;
             let amount;
             try {
-                amount = window.web3().utils.toWei(amountInput, 'ether');
+                const shmAmount = parseFloat(amountInput) / shmPrice[currency.toLowerCase()];
+                amount = window.web3.utils.toWei(shmAmount.toString(), 'ether');
             } catch (error) {
-                expenseMessage.textContent = 'Invalid amount format. Please enter a valid number.';
+                expenseMessage.textContent = 'Invalid amount format or SHM price not loaded. Please try again.';
                 return;
             }
             const splitType = document.getElementById('split').value;
@@ -304,7 +377,7 @@
             }
             try {
                 const tx = await window.getContract().methods.addExpense(groupId, description, amount, splitType, customShares).send({
-                    from: window.getAccount(),
+                    from: await window.getAccount(),
                     value: '0',
                     type: '0x0'
                 });
@@ -327,6 +400,9 @@
             customInput.style.display = show ? 'block' : 'none';
             customLabel.style.display = show ? 'block' : 'none';
         });
+
+        document.getElementById('amount').addEventListener('input', updateShmAmount);
+        document.getElementById('currency').addEventListener('change', updateShmAmount);
     </script>
 </body>
 </html>
