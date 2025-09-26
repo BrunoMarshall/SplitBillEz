@@ -159,16 +159,17 @@ let web3;
 let userAccount;
 let contract;
 let shmPrice = null;
+const RPC_URLS = ['https://cycle3.api.shardeum.org', 'https://api-unstable.shardeum.org'];
 
-async function initWeb3() {
+async function initWeb3(rpcIndex = 0) {
     if (!window.ethereum) {
         alert('MetaMask is not installed. Please install MetaMask and refresh the page.');
         console.error('MetaMask not detected');
         return false;
     }
     try {
-        web3 = new Web3(window.ethereum);
-        console.log('Web3 initialized:', !!web3, 'Version:', Web3.version);
+        web3 = new Web3(new Web3.providers.HttpProvider(RPC_URLS[rpcIndex]));
+        console.log(`Web3 initialized with RPC ${RPC_URLS[rpcIndex]}:`, !!web3, 'Version:', Web3.version);
         await window.ethereum.request({
             method: 'wallet_switchEthereumChain',
             params: [{ chainId: '0x1f90' }] // Shardeum Unstable Testnet (8080)
@@ -179,7 +180,7 @@ async function initWeb3() {
                     params: [{
                         chainId: '0x1f90',
                         chainName: 'Shardeum Unstable Testnet',
-                        rpcUrls: ['https://cycle3.api.shardeum.org'], // Alternative RPC
+                        rpcUrls: [RPC_URLS[rpcIndex]],
                         nativeCurrency: { name: 'SHM', symbol: 'SHM', decimals: 18 },
                         blockExplorerUrls: ['https://explorer-unstable.shardeum.org']
                     }]
@@ -199,7 +200,11 @@ async function initWeb3() {
         await updateUI();
         return true;
     } catch (error) {
-        console.error('Error initializing Web3:', error);
+        console.error(`Error initializing Web3 with RPC ${RPC_URLS[rpcIndex]}:`, error);
+        if (rpcIndex < RPC_URLS.length - 1) {
+            console.log(`Retrying with next RPC: ${RPC_URLS[rpcIndex + 1]}`);
+            return await initWeb3(rpcIndex + 1);
+        }
         alert('Failed to connect to MetaMask: ' + error.message);
         return false;
     }
@@ -318,20 +323,8 @@ async function createBlockie(address, size = 32, initial = '') {
             }
             return canvas.toDataURL();
         }
-        const blockie = makeBlockie(address || '0x0');
-        const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(blockie, 0, 0, size, size);
-        if (initial) {
-            ctx.fillStyle = 'white';
-            ctx.font = `${size / 2}px Arial`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(initial, size / 2, size / 2);
-        }
-        return canvas.toDataURL();
+        const blockie = await makeBlockie(address || '0x0', { size: 8, scale: size / 8 });
+        return blockie;
     } catch (error) {
         console.error('Error creating Blockie:', error);
         const canvas = document.createElement('canvas');
@@ -396,6 +389,29 @@ async function checkMetaMaskConnection() {
     }
 }
 
+async function fetchExpensesFallback(groupId, expenseCount) {
+    const expenses = [];
+    for (let i = 1; i <= Math.min(expenseCount, 50); i++) {
+        try {
+            const expense = await getContract().methods.expenses(i).call();
+            if (expense && expense.description && expense.amount && parseInt(expense.amount) > 0) {
+                const block = await web3.eth.getBlock('latest');
+                expenses.push({
+                    id: i,
+                    description: expense.description || 'No description',
+                    amount: web3.utils.fromWei(expense.amount || '0', 'ether'),
+                    payer: expense.payer || 'Unknown',
+                    splitType: expense.splitType || 'Unknown',
+                    timestamp: block ? new Date(block.timestamp * 1000).toLocaleString() : 'N/A'
+                });
+            }
+        } catch (error) {
+            console.error(`Error fetching expense ${i} for group ${groupId}:`, error);
+        }
+    }
+    return expenses;
+}
+
 async function populateDashboard() {
     const dashboardContent = document.getElementById('dashboardContent');
     if (!dashboardContent) {
@@ -458,8 +474,8 @@ async function populateDashboard() {
                 try {
                     const result = await getContract().methods.getGroup(i).call();
                     console.log(`Fallback scan group ${i} result:`, result);
-                    const name = result[0] || result.name || 'Unnamed Group';
-                    const members = result[1] || result.members || [];
+                    const name = result.name || result[0] || 'Unnamed Group';
+                    const members = result.members || result[1] || [];
                     if (members && Array.isArray(members) && members.map(addr => addr.toLowerCase()).includes(userAddress.toLowerCase())) {
                         groupIds.add(i.toString());
                         console.log(`Added groupId ${i} from fallback scan`);
@@ -480,15 +496,22 @@ async function populateDashboard() {
             dashboardContent.innerHTML = '<p>No groups found for this account. Create one in the Add Expense page or verify your MetaMask account.</p>';
             return;
         }
-        const events = await getContract().getPastEvents('ExpenseAdded', { fromBlock: 0, toBlock: 'latest' });
-        console.log('ExpenseAdded events:', events);
+        let events = [];
+        try {
+            events = await getContract().getPastEvents('ExpenseAdded', { fromBlock: 0, toBlock: 'latest' });
+            console.log('ExpenseAdded events:', events);
+        } catch (error) {
+            console.error('Error fetching ExpenseAdded events:', error);
+        }
         dashboardContent.innerHTML = '';
+        const expenseCount = parseInt(await getContract().methods.expenseCount().call()) || 0;
+        console.log('Total expense count from contract:', expenseCount);
         for (let groupId of groupIds) {
             try {
                 const result = await getContract().methods.getGroup(groupId).call();
-                console.log(`Group ${groupId} result:`, result);
-                const name = result[0] || result.name || 'Unnamed Group';
-                const members = result[1] || result.members || [];
+                console.log(`Group ${groupId} raw result:`, result);
+                const name = result.name || result[0] || 'Unnamed Group';
+                const members = result.members || result[1] || [];
                 if (!members || !Array.isArray(members)) {
                     console.warn(`Group ${groupId} has invalid members array:`, members);
                     continue;
@@ -507,8 +530,8 @@ async function populateDashboard() {
                 let balMembers = [], balances = [];
                 try {
                     const balanceData = await getContract().methods.getGroupBalances(groupId).call();
-                    balMembers = balanceData[0] || balanceData.members || [];
-                    balances = balanceData[1] || balanceData.bals || [];
+                    balMembers = balanceData.members || balanceData[0] || [];
+                    balances = balanceData.bals || balanceData[1] || [];
                     console.log(`Group ${groupId} balances:`, { balMembers, balances });
                 } catch (error) {
                     console.error(`Error fetching balances for group ${groupId}:`, error);
@@ -520,7 +543,7 @@ async function populateDashboard() {
                         avatar: await createBlockie(addr, 32, getMemberName(addr)[0].toUpperCase())
                     }))
                 );
-                const groupExpenses = events
+                let groupExpenses = events
                     .filter(event => String(event.returnValues.groupId) === String(groupId))
                     .map(event => ({
                         id: event.returnValues.expenseId,
@@ -537,6 +560,11 @@ async function populateDashboard() {
                             }
                         })() : 'N/A'
                     }));
+                if (groupExpenses.length === 0) {
+                    console.log(`No ExpenseAdded events for group ${groupId}, trying fallback expense fetch`);
+                    groupExpenses = await fetchExpensesFallback(groupId, expenseCount);
+                    console.log(`Fallback expenses for group ${groupId}:`, groupExpenses);
+                }
                 console.log(`Group ${groupId} expenses:`, groupExpenses);
                 const groupDiv = document.createElement('div');
                 groupDiv.className = 'group';
@@ -736,7 +764,7 @@ async function populateGroupDropdown() {
                     console.log(`Raw userGroups[${i}]:`, groupId);
                     if (groupId && parseInt(groupId) > 0 && groupId !== "0" && groupId !== "") {
                         groupIds.add(groupId);
-                        console.log(`Added groupId ${groupId} at index ${i}`);
+                        console.log(`Added groupId ${i} at index ${i}`);
                         break;
                     } else {
                         console.log(`Skipping userGroups[${i}]: invalid groupId ${groupId}`);
@@ -769,8 +797,8 @@ async function populateGroupDropdown() {
                 try {
                     const result = await getContract().methods.getGroup(i).call();
                     console.log(`Fallback scan group ${i} result:`, result);
-                    const name = result[0] || result.name || 'Unnamed Group';
-                    const members = result[1] || result.members || [];
+                    const name = result.name || result[0] || 'Unnamed Group';
+                    const members = result.members || result[1] || [];
                     if (members && Array.isArray(members) && members.map(addr => addr.toLowerCase()).includes(userAddress.toLowerCase())) {
                         groupIds.add(i.toString());
                         console.log(`Added groupId ${i} from fallback scan`);
@@ -800,9 +828,9 @@ async function populateGroupDropdown() {
             for (let groupId of groupIds) {
                 try {
                     const result = await getContract().methods.getGroup(groupId).call();
-                    console.log(`Group ${groupId} result:`, result);
-                    const name = result[0] || result.name || 'Unnamed Group';
-                    const members = result[1] || result.members || [];
+                    console.log(`Group ${groupId} raw result:`, result);
+                    const name = result.name || result[0] || 'Unnamed Group';
+                    const members = result.members || result[1] || [];
                     if (!members || !Array.isArray(members)) {
                         console.warn(`Group ${groupId} has invalid members array:`, members);
                         continue;
@@ -923,7 +951,7 @@ async function handleExpenseFormSubmit(e) {
                 const name = nameInput?.value?.trim() || '';
                 if (address && (web3.utils.isAddress(address) || address === userAddress)) {
                     members.push(address);
-                    if (name) newMemberNames[address] = name;
+                    if (name && name !== 'Me') newMemberNames[address] = name;
                 }
             }
             console.log('Submitting members:', members);
@@ -949,7 +977,7 @@ async function handleExpenseFormSubmit(e) {
             e.target.reset();
             await populateGroupDropdown();
             const groupCount = await getContract().methods.groupCount().call();
-            document.getElementById('groupId').value = parseInt(groupCount) - 1;
+            document.getElementById('groupId').value = parseInt(groupCount);
         } catch (error) {
             console.error('Group creation error:', error);
             expenseMessage.textContent = 'Error: ' + (error.message.includes('Eip1559NotSupportedError') ? 'Network does not support EIP-1559. Try again.' : error.message.includes('revert') ? 'Invalid input or contract revert. Check addresses and try again.' : error.message);
