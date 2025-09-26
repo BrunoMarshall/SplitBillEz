@@ -577,9 +577,8 @@ async function populateDashboard() {
                         groupIds.push(groupId);
                     } else {
                         console.log(`Stopping at index ${i}: invalid groupId ${groupId}`);
-                        attempts = 0;
+                        break;
                     }
-                    break;
                 } catch (error) {
                     console.error(`Error fetching userGroups[${i}], attempt ${4 - attempts}:`, error);
                     attempts--;
@@ -711,12 +710,12 @@ async function fetchShmPrice() {
     try {
         const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=shardeum&vs_currencies=eur,usd,inr');
         const data = await response.json();
-        shmPrice = data.shardeum || { eur: 0, usd: 0, inr: 0 };
+        shmPrice = data.shardeum || { eur: 0.1, usd: 0.11, inr: 9.0 }; // Fallback prices
         console.log('Fetched SHM price:', shmPrice);
         updateShmAmount();
     } catch (error) {
         console.error('Error fetching SHM price:', error);
-        shmPrice = { eur: 0, usd: 0, inr: 0 };
+        shmPrice = { eur: 0.1, usd: 0.11, inr: 9.0 }; // Fallback prices
         const shmAmountElement = document.getElementById('shmAmount');
         if (shmAmountElement) {
             shmAmountElement.textContent = 'Error fetching SHM price. Using default.';
@@ -771,9 +770,8 @@ async function populateGroupDropdown() {
                         groupIds.push(groupId);
                     } else {
                         console.log(`Stopping at index ${i}: invalid groupId ${groupId}`);
-                        attempts = 0;
+                        break;
                     }
-                    break;
                 } catch (error) {
                     console.error(`Error fetching userGroups[${i}], attempt ${4 - attempts}:`, error);
                     attempts--;
@@ -1013,7 +1011,6 @@ window.disconnectWallet = disconnectWallet;
 window.handleMetaMaskToggle = handleMetaMaskToggle;
 window.getContract = () => contract;
 window.getAccount = () => userAccount;
-window.web3 = web3;
 window.truncateAddress = truncateAddress;
 window.getMemberName = getMemberName;
 window.createBlockie = createBlockie;
