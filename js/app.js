@@ -147,6 +147,7 @@ const CONTRACT_ABI = [
                 "type": "uint256"
             },
             {
+                "indexed": false,
                 "internalType": "address",
                 "name": "payer",
                 "type": "address"
@@ -409,13 +410,43 @@ async function initWeb3() {
     }
 }
 
+async function disconnectWallet() {
+    try {
+        userAccount = null;
+        contract = null;
+        web3 = null;
+        await updateUI();
+        console.log('Wallet disconnected');
+        // Reset UI elements
+        const groupSelect = document.getElementById('groupId');
+        const groupCreationDiv = document.getElementById('groupCreation');
+        const createGroupBtn = document.getElementById('createGroupBtn');
+        if (groupSelect && groupCreationDiv && createGroupBtn) {
+            groupSelect.innerHTML = '<option value="" disabled selected>Connect wallet first</option>';
+            groupCreationDiv.style.display = 'none';
+            createGroupBtn.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Error disconnecting wallet:', error);
+        alert('Failed to disconnect wallet: ' + error.message);
+    }
+}
+
+async function handleMetaMaskToggle() {
+    if (userAccount) {
+        await disconnectWallet();
+    } else {
+        await initWeb3().then(populateGroupDropdown);
+    }
+}
+
 async function updateUI() {
     const buttons = document.querySelectorAll('.metamask-button');
     buttons.forEach(btn => {
         if (userAccount) {
-            btn.textContent = `Connected: ${userAccount.slice(0,6)}...${userAccount.slice(-4)}`;
+            btn.textContent = `Disconnect (${userAccount.slice(0,6)}...${userAccount.slice(-4)})`;
             btn.style.backgroundColor = '#28a745';
-            btn.disabled = true;
+            btn.disabled = false; // Keep enabled for disconnect
         } else {
             btn.textContent = 'Connect with MetaMask';
             btn.style.backgroundColor = '#ffffff';
@@ -426,6 +457,8 @@ async function updateUI() {
 
 // Export globals
 window.initWeb3 = initWeb3;
+window.disconnectWallet = disconnectWallet;
+window.handleMetaMaskToggle = handleMetaMaskToggle;
 window.getContract = () => contract;
 window.getAccount = () => userAccount;
 window.web3 = () => web3;

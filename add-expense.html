@@ -17,7 +17,7 @@
                 <a href="dashboard.html">Dashboard</a>
                 <a href="add-expense.html">Add Expense</a>
             </nav>
-            <button class="metamask-button" onclick="initWeb3().then(populateGroupDropdown)">Connect with MetaMask</button>
+            <button class="metamask-button" onclick="handleMetaMaskToggle()">Connect with MetaMask</button>
         </div>
     </header>
     <main>
@@ -31,7 +31,7 @@
                     <label>Member Addresses:</label>
                     <div id="memberInputs">
                         <div class="member-input">
-                            <input type="text" class="member-name" placeholder="Your Name (e.g., Alice)" required>
+                            <input type="text" class="member-name" value="Me" readonly>
                             <input type="text" class="member-address" id="userAddress" readonly>
                             <span class="member-label">Your Address</span>
                         </div>
@@ -46,7 +46,7 @@
                 <select id="groupId" required>
                     <option value="" disabled selected>Select a group</option>
                 </select>
-                <button type="button" id="createGroupBtn" onclick="showGroupCreation()">Create New Group</button>
+                <button type="button" id="createGroupBtn" onclick="showGroupCreation()">Create Group</button>
                 <label for="description">Description:</label>
                 <input type="text" id="description" placeholder="e.g., Dinner at Restaurant" required>
                 <label for="amount">Amount (SHM):</label>
@@ -100,7 +100,7 @@
             }
             try {
                 const userAddress = window.getAccount();
-                // Set user's address in readonly field
+                // Set user's address and name in readonly fields
                 const userAddressInput = document.getElementById('userAddress');
                 if (userAddressInput) {
                     userAddressInput.value = userAddress;
@@ -215,7 +215,7 @@
                 this.reset();
                 document.getElementById('memberInputs').innerHTML = `
                     <div class="member-input">
-                        <input type="text" class="member-name" placeholder="Your Name (e.g., Alice)" required>
+                        <input type="text" class="member-name" value="Me" readonly>
                         <input type="text" class="member-address" id="userAddress" readonly>
                         <span class="member-label">Your Address</span>
                     </div>
