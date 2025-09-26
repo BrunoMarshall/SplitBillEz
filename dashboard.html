@@ -8,7 +8,7 @@
     <link rel="icon" href="images/splitbillez_favicon.png">
     <script src="https://cdn.jsdelivr.net/npm/web3@latest/dist/web3.min.js"></script>
 </head>
-<body onload="initWeb3()">
+<body onload="initWeb3().then(populateDashboard)">
     <header>
         <div class="header-container">
             <img src="images/splitbillez_logo.png" alt="SplitBillEz Logo" class="logo">
@@ -17,22 +17,30 @@
                 <a href="dashboard.html">Dashboard</a>
                 <a href="add-expense.html">Add Expense</a>
             </nav>
-            <button class="metamask-button" onclick="initWeb3()">Connect with MetaMask</button>
+            <button class="metamask-button" onclick="handleMetaMaskToggle()">Connect with MetaMask</button>
         </div>
     </header>
     <main>
         <section>
             <h2>Your Groups</h2>
-            <div class="group">
-                <h3>Trip to Goa (ID: 0)</h3>
-                <p>You owe Alice 500 SHM.</p>
-                <button onclick="settleUp(0, '0x742d35Cc6634C0532925a3b8D7aBFAb7cD5bE4c4', 500000000000000000000n)">Settle Up</button>
+            <div id="dashboardContent">
+                <p>Loading groups...</p>
             </div>
-            <div class="group">
-                <h3>Dinner Party (ID: 1)</h3>
-                <p>You owe Charlie 150 SHM.</p>
-                <button onclick="settleUp(1, '0x1234567890123456789012345678901234567890', 150000000000000000000n)">Settle Up</button>
-            </div>
+            <h2>Manage Debts</h2>
+            <form id="settleDebtForm" style="display:none;">
+                <label for="settleGroupId">Group:</label>
+                <select id="settleGroupId" required>
+                    <option value="" disabled selected>Select a group</option>
+                </select>
+                <label for="settleTo">Pay To:</label>
+                <select id="settleTo" required>
+                    <option value="" disabled selected>Select a member</option>
+                </select>
+                <label for="settleAmount">Amount (SHM):</label>
+                <input type="number" id="settleAmount" placeholder="e.g., 10" step="0.01" required>
+                <button type="submit">Settle Debt</button>
+            </form>
+            <p id="settleMessage"></p>
         </section>
     </main>
     <footer>
@@ -60,32 +68,163 @@
     </footer>
     <script src="js/app.js"></script>
     <script>
-        async function settleUp(groupId, toAddress, amountWei) {
+        // Member name mapping (temporary, could be stored in localStorage or contract)
+        const memberNames = {
+            '0xea60f886fa7c1cadfa48b93262b272fc2433d3d5': 'Me',
+            '0x2defbd7d484ad2bea98028f7ffd2940bc7c3b0cd': 'John' // Add more as needed
+        };
+
+        async function populateDashboard() {
+            const dashboardContent = document.getElementById('dashboardContent');
+            const settleGroupSelect = document.getElementById('settleGroupId');
+            const settleToSelect = document.getElementById('settleTo');
+            const settleDebtForm = document.getElementById('settleDebtForm');
+            dashboardContent.innerHTML = '<p>Loading groups...</p>';
+            settleGroupSelect.innerHTML = '<option value="" disabled selected>Loading groups...</option>';
             if (!window.getContract() || !window.getAccount()) {
-                alert('Connect wallet first!');
+                dashboardContent.innerHTML = '<p>Please connect MetaMask to view your groups.</p>';
+                settleGroupSelect.innerHTML = '<option value="" disabled selected>Connect wallet first</option>';
+                settleDebtForm.style.display = 'none';
                 return;
             }
             try {
-                // Step 1: Native SHM transfer
-                const txHash1 = await window.web3.eth.sendTransaction({
-                    from: window.getAccount(),
-                    to: toAddress,
-                    value: amountWei
+                const userAddress = window.getAccount();
+                console.log('Fetching groups for dashboard:', userAddress); // Debug log
+                const groupIds = [];
+                for (let i = 0; i < 50; i++) {
+                    try {
+                        const groupId = await window.getContract().methods.userGroups(userAddress, i).call();
+                        console.log(`userGroups[${i}]:`, groupId); // Debug log
+                        if (parseInt(groupId) >= 0 && groupId !== "") {
+                            groupIds.push(groupId);
+                        } else {
+                            break;
+                        }
+                    } catch (error) {
+                        console.error(`Error fetching userGroups[${i}]:`, error);
+                        break;
+                    }
+                }
+                console.log('Dashboard group IDs:', groupIds); // Debug log
+                if (groupIds.length === 0) {
+                    dashboardContent.innerHTML = '<p>No groups found. Create one in the Add Expense page.</p>';
+                    settleGroupSelect.innerHTML = '<option value="" disabled selected>No groups found</option>';
+                    settleDebtForm.style.display = 'none';
+                    return;
+                }
+                dashboardContent.innerHTML = '';
+                settleGroupSelect.innerHTML = '<option value="" disabled selected>Select a group</option>';
+                settleDebtForm.style.display = 'block';
+                for (let groupId of groupIds) {
+                    try {
+                        const [name, members] = await window.getContract().methods.getGroup(groupId).call();
+                        console.log(`Group ${groupId} details:`, { name, members }); // Debug log
+                        // Fetch group balances
+                        const [balMembers, balances] = await window.getContract().methods.getGroupBalances(groupId).call();
+                        console.log(`Group ${groupId} balances:`, { balMembers, balances }); // Debug log
+                        // Fetch expenses
+                        const expenseCount = await window.getContract().methods.expenseCount().call();
+                        const expenses = [];
+                        for (let i = 0; i < expenseCount; i++) {
+                            try {
+                                const expense = await window.getContract().methods.expenses(i).call();
+                                if (expense.groupId === groupId) {
+                                    expenses.push({
+                                        id: i,
+                                        description: expense.description,
+                                        amount: window.web3().utils.fromWei(expense.amount, 'ether'),
+                                        payer: expense.payer,
+                                        splitType: expense.splitType
+                                    });
+                                }
+                            } catch (error) {
+                                console.error(`Error fetching expense ${i}:`, error);
+                            }
+                        }
+                        // Create group section
+                        const groupDiv = document.createElement('div');
+                        groupDiv.className = 'group';
+                        groupDiv.innerHTML = `
+                            <h3>${name} (ID: ${groupId})</h3>
+                            <p><strong>Members:</strong> ${members.map(addr => memberNames[addr.toLowerCase()] || addr.slice(0, 6) + '...').join(', ')}</p>
+                            <h4>Expenses:</h4>
+                            ${expenses.length > 0 ? expenses.map(exp => `
+                                <p>Expense ${exp.id}: ${exp.description} - ${exp.amount} SHM (Payer: ${memberNames[exp.payer.toLowerCase()] || exp.payer.slice(0, 6) + '...'}, Split: ${exp.splitType})</p>
+                            `).join('') : '<p>No expenses found.</p>'}
+                            <h4>Balances:</h4>
+                            ${balMembers.map((addr, i) => `
+                                <p>${memberNames[addr.toLowerCase()] || addr.slice(0, 6) + '...'}: ${parseFloat(window.web3().utils.fromWei(balances[i], 'ether')).toFixed(2)} SHM</p>
+                            `).join('')}
+                        `;
+                        dashboardContent.appendChild(groupDiv);
+                        // Add group to settle debt dropdown
+                        const option = document.createElement('option');
+                        option.value = groupId;
+                        option.textContent = `${name} (ID: ${groupId})`;
+                        settleGroupSelect.appendChild(option);
+                    } catch (error) {
+                        console.error(`Error fetching group ${groupId}:`, error);
+                    }
+                }
+                // Update settleTo dropdown when group is selected
+                settleGroupSelect.addEventListener('change', async function() {
+                    settleToSelect.innerHTML = '<option value="" disabled selected>Select a member</option>';
+                    if (this.value) {
+                        try {
+                            const [_, members] = await window.getContract().methods.getGroup(this.value).call();
+                            for (let addr of members) {
+                                if (addr.toLowerCase() !== userAddress.toLowerCase()) {
+                                    const option = document.createElement('option');
+                                    option.value = addr;
+                                    option.textContent = memberNames[addr.toLowerCase()] || addr.slice(0, 6) + '...';
+                                    settleToSelect.appendChild(option);
+                                }
+                            }
+                        } catch (error) {
+                            console.error(`Error fetching members for group ${this.value}:`, error);
+                            settleToSelect.innerHTML = '<option value="" disabled selected>Error loading members</option>';
+                        }
+                    }
                 });
-                
-                // Step 2: Record settlement on-chain
-                const txHash2 = await window.getContract().methods.settleDebt(groupId, toAddress, amountWei).send({ from: window.getAccount() });
-                
-                alert(`Settled ${web3.utils.fromWei(amountWei, 'ether')} SHM!\nTransfer Tx: https://explorer-unstable.shardeum.org/tx/${txHash1.transactionHash}\nRecord Tx: https://explorer-unstable.shardeum.org/tx/${txHash2.transactionHash}`);
-                
-                // Update UI
-                event.target.disabled = true;
-                event.target.textContent = 'Settled';
-                event.target.previousElementSibling.textContent = `Settled with ${event.target.previousElementSibling.textContent.split(' ')[2]}`;
             } catch (error) {
-                alert('Error: ' + error.message + '\nEnsure you have enough SHM for gas/transfer!');
+                console.error('Error populating dashboard:', error);
+                dashboardContent.innerHTML = '<p>Error loading groups. Please try again.</p>';
+                settleGroupSelect.innerHTML = '<option value="" disabled selected>Error loading groups</option>';
+                settleDebtForm.style.display = 'none';
             }
         }
+
+        document.getElementById('settleDebtForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            if (!window.web3() || !window.getContract() || !window.getAccount()) {
+                alert('Please connect MetaMask first.');
+                return;
+            }
+            const groupId = document.getElementById('settleGroupId').value;
+            const toAddress = document.getElementById('settleTo').value;
+            const amountInput = document.getElementById('settleAmount').value;
+            const settleMessage = document.getElementById('settleMessage');
+            let amount;
+            try {
+                amount = window.web3().utils.toWei(amountInput, 'ether');
+            } catch (error) {
+                settleMessage.textContent = 'Invalid amount format. Please enter a valid number.';
+                return;
+            }
+            try {
+                const tx = await window.getContract().methods.settleDebt(groupId, toAddress, amount).send({
+                    from: window.getAccount(),
+                    value: '0',
+                    type: '0x0' // Use legacy transaction
+                });
+                settleMessage.textContent = `Debt settled! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`;
+                this.reset();
+                await populateDashboard();
+            } catch (error) {
+                console.error('Debt settlement error:', error);
+                settleMessage.textContent = 'Error: ' + (error.message.includes('Eip1559NotSupportedError') ? 'Network does not support EIP-1559. Try again.' : error.message.includes('revert') ? 'Invalid input or contract revert. Check inputs and try again.' : error.message);
+            }
+        });
     </script>
 </body>
 </html>
