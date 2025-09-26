@@ -165,63 +165,104 @@ function isMobileDevice() {
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
 
-async function initWeb3(rpcIndex = 0) {
+async function initWeb3(rpcIndex = 0, maxRetries = 3) {
     console.log('Initializing Web3 for', isMobileDevice() ? 'mobile' : 'desktop');
     if (!window.ethereum) {
+        const message = isMobileDevice()
+            ? 'Please open this page in the MetaMask in-app browser or ensure MetaMask is installed and accessible. Alternatively, tap here to open in MetaMask: <a href="metamask://">Open MetaMask</a>'
+            : 'MetaMask is not installed. Please install MetaMask and refresh the page.';
+        alert(message);
+        console.error('MetaMask not detected:', message);
         if (isMobileDevice()) {
-            alert('Please open this page in the MetaMask browser or ensure MetaMask is installed and accessible.');
-            console.error('MetaMask not detected on mobile');
-        } else {
-            alert('MetaMask is not installed. Please install MetaMask and refresh the page.');
-            console.error('MetaMask not detected on desktop');
+            document.body.innerHTML += `<div style="text-align: center; margin-top: 20px;"><a href="metamask://">Open in MetaMask</a></div>`;
         }
         return false;
     }
     try {
-        // Use window.ethereum directly for mobile to leverage MetaMask's injected provider
-        web3 = new Web3(isMobileDevice() ? window.ethereum : new Web3.providers.HttpProvider(RPC_URLS[rpcIndex]));
-        console.log(`Web3 initialized with ${isMobileDevice() ? 'window.ethereum' : 'RPC ' + RPC_URLS[rpcIndex]}:`, !!web3, 'Version:', Web3.version);
-        
-        // Ensure Shardeum Unstable Testnet (chainId: 8080)
-        await window.ethereum.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: '0x1f90' }]
-        }).catch(async (switchError) => {
-            if (switchError.code === 4902) {
+        // Prioritize window.ethereum for both desktop and mobile
+        web3 = new Web3(window.ethereum);
+        console.log('Web3 initialized with window.ethereum:', !!web3, 'Version:', Web3.version);
+
+        // Retry logic for chain switch
+        let chainSwitchAttempts = 0;
+        const maxChainSwitchAttempts = 3;
+        while (chainSwitchAttempts < maxChainSwitchAttempts) {
+            try {
                 await window.ethereum.request({
-                    method: 'wallet_addEthereumChain',
-                    params: [{
-                        chainId: '0x1f90',
-                        chainName: 'Shardeum Unstable Testnet',
-                        rpcUrls: [RPC_URLS[rpcIndex]],
-                        nativeCurrency: { name: 'SHM', symbol: 'SHM', decimals: 18 },
-                        blockExplorerUrls: ['https://explorer-unstable.shardeum.org']
-                    }]
+                    method: 'wallet_switchEthereumChain',
+                    params: [{ chainId: '0x1f90' }] // Shardeum Unstable Testnet (8080)
                 });
-            } else {
+                break;
+            } catch (switchError) {
+                if (switchError.code === 4902) {
+                    await window.ethereum.request({
+                        method: 'wallet_addEthereumChain',
+                        params: [{
+                            chainId: '0x1f90',
+                            chainName: 'Shardeum Unstable Testnet',
+                            rpcUrls: [RPC_URLS[rpcIndex]],
+                            nativeCurrency: { name: 'SHM', symbol: 'SHM', decimals: 18 },
+                            blockExplorerUrls: ['https://explorer-unstable.shardeum.org']
+                        }]
+                    });
+                    break;
+                } else if (switchError.message.includes('network error') && chainSwitchAttempts < maxChainSwitchAttempts - 1) {
+                    console.warn(`Chain switch failed, retrying (${chainSwitchAttempts + 1}/${maxChainSwitchAttempts})...`);
+                    chainSwitchAttempts++;
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    continue;
+                }
                 throw switchError;
             }
-        });
-
-        // Request accounts
-        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-        if (!accounts || accounts.length === 0) {
-            throw new Error('No accounts returned by MetaMask');
         }
-        userAccount = accounts[0];
+
+        // Request accounts with retry
+        let accountAttempts = 0;
+        while (accountAttempts < maxRetries) {
+            try {
+                const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                if (!accounts || accounts.length === 0) {
+                    throw new Error('No accounts returned by MetaMask');
+                }
+                userAccount = accounts[0];
+                break;
+            } catch (accountError) {
+                if (accountError.message.includes('network error') && accountAttempts < maxRetries - 1) {
+                    console.warn(`Account request failed, retrying (${accountAttempts + 1}/${maxRetries})...`);
+                    accountAttempts++;
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    continue;
+                }
+                throw accountError;
+            }
+        }
+
         contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
         console.log('Connected account:', userAccount);
         console.log('Contract initialized:', !!contract);
         await updateUI();
+
+        // Fallback to HTTP provider if transaction fails later
+        window.ethereum.on('error', async (error) => {
+            console.error('MetaMask provider error:', error);
+            if (rpcIndex < RPC_URLS.length - 1) {
+                console.log(`Switching to fallback RPC: ${RPC_URLS[rpcIndex + 1]}`);
+                web3.setProvider(new Web3.providers.HttpProvider(RPC_URLS[rpcIndex + 1]));
+                contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
+                await updateUI();
+            }
+        });
+
         return true;
     } catch (error) {
-        console.error(`Error initializing Web3 with RPC ${RPC_URLS[rpcIndex]}:`, error);
-        if (!isMobileDevice() && rpcIndex < RPC_URLS.length - 1) {
+        console.error(`Error initializing Web3:`, error);
+        if (rpcIndex < RPC_URLS.length - 1) {
             console.log(`Retrying with next RPC: ${RPC_URLS[rpcIndex + 1]}`);
-            await new Promise(resolve => setTimeout(resolve, 2000)); // 2-second delay before retry
-            return await initWeb3(rpcIndex + 1);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            return await initWeb3(rpcIndex + 1, maxRetries);
         }
-        alert('Failed to connect to MetaMask or RPC endpoints: ' + error.message);
+        const message = `Failed to connect to MetaMask or RPC endpoints: ${error.message}. Please check your MetaMask connection and try again.`;
+        alert(message);
         console.error('All RPC endpoints failed:', RPC_URLS);
         return false;
     }
@@ -365,14 +406,17 @@ async function checkMetaMaskConnection() {
     console.log('Checking MetaMask connection on page load...');
     try {
         if (!window.ethereum) {
-            const message = isMobileDevice() 
-                ? 'Please open this page in the MetaMask browser or ensure MetaMask is installed and accessible.'
+            const message = isMobileDevice()
+                ? 'Please open this page in the MetaMask in-app browser or ensure MetaMask is installed and accessible. <a href="metamask://">Open in MetaMask</a>'
                 : 'MetaMask not detected. Please install MetaMask and refresh.';
             console.log(message);
             if (document.getElementById('dashboardContent')) {
                 document.getElementById('dashboardContent').innerHTML = message;
             } else if (document.getElementById('expenseMessage')) {
-                document.getElementById('expenseMessage').textContent = message;
+                document.getElementById('expenseMessage').innerHTML = message;
+            }
+            if (isMobileDevice()) {
+                document.body.innerHTML += `<div style="text-align: center; margin-top: 20px;"><a href="metamask://">Open in MetaMask</a></div>`;
             }
             return;
         }
@@ -814,7 +858,7 @@ async function populateGroupDropdown() {
         groupSelect.innerHTML = '<option value="" disabled selected>Connect wallet first</option>';
         groupCreationDiv.style.display = 'none';
         submitButton.textContent = 'Add Expense';
-        expenseMessage.textContent = 'Please connect MetaMask to view groups.';
+        expenseMessage.textContent = 'Please connect MetaMask to load groups.';
         return;
     }
     try {
@@ -836,7 +880,7 @@ async function populateGroupDropdown() {
                     console.log(`Raw userGroups[${i}]:`, groupId);
                     if (groupId && parseInt(groupId) > 0 && groupId !== "0" && groupId !== "") {
                         groupIds.add(groupId);
-                        console.log(`Added groupId ${groupId} at index ${i}`);
+                        console.log(`Added groupId ${i} at index ${i}`);
                         break;
                     } else {
                         console.log(`Skipping userGroups[${i}]: invalid groupId ${groupId}`);
@@ -1105,12 +1149,15 @@ async function handleExpenseFormSubmit(e) {
             return;
         }
     }
+    let tx;
     try {
         console.log('Submitting expense:', { groupId, description, amount, splitType, customShares });
-        const tx = await getContract().methods.addExpense(groupId, description, amount, splitType, customShares).send({
+        tx = await getContract().methods.addExpense(groupId, description, amount, splitType, customShares).send({
             from: await getAccount(),
             value: '0',
-            type: '0x0'
+            type: '0x2', // Use EIP-1559 transaction type
+            maxPriorityFeePerGas: web3.utils.toWei('2', 'gwei'),
+            maxFeePerGas: web3.utils.toWei('100', 'gwei')
         });
         expenseMessage.textContent = `Expense added! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`;
         console.log('Expense added, tx:', tx.transactionHash);
@@ -1118,7 +1165,52 @@ async function handleExpenseFormSubmit(e) {
         await populateDashboard();
     } catch (error) {
         console.error('Expense submission error:', error);
-        expenseMessage.textContent = 'Error: ' + (error.message.includes('Eip1559NotSupportedError') ? 'Network does not support EIP-1559. Try again.' : error.message.includes('revert') ? 'Invalid input or contract revert. Check inputs and try again.' : error.message);
+        if (error.message.includes('Failed to check for transaction receipt') || error.message.includes('network error')) {
+            expenseMessage.textContent = 'Network error: Unable to connect to Shardeum RPC. Switching to fallback RPC...';
+            if (RPC_URLS.indexOf(web3.currentProvider.host) < RPC_URLS.length - 1) {
+                const nextRpcIndex = RPC_URLS.indexOf(web3.currentProvider.host) + 1;
+                console.log(`Retrying with fallback RPC: ${RPC_URLS[nextRpcIndex]}`);
+                web3.setProvider(new Web3.providers.HttpProvider(RPC_URLS[nextRpcIndex]));
+                contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
+                try {
+                    tx = await getContract().methods.addExpense(groupId, description, amount, splitType, customShares).send({
+                        from: await getAccount(),
+                        value: '0',
+                        type: '0x2',
+                        maxPriorityFeePerGas: web3.utils.toWei('2', 'gwei'),
+                        maxFeePerGas: web3.utils.toWei('100', 'gwei')
+                    });
+                    expenseMessage.textContent = `Expense added! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`;
+                    console.log('Expense added with fallback RPC, tx:', tx.transactionHash);
+                    e.target.reset();
+                    await populateDashboard();
+                } catch (retryError) {
+                    console.error('Retry failed with fallback RPC:', retryError);
+                    expenseMessage.textContent = 'Error: Failed to add expense after retrying with fallback RPC. Please try again later.';
+                }
+            } else {
+                expenseMessage.textContent = 'Error: All RPC endpoints failed. Please check your network and try again.';
+            }
+        } else {
+            expenseMessage.textContent = 'Error: ' + (error.message.includes('Eip1559NotSupportedError') ? 'Network does not support EIP-1559. Trying legacy transaction...' : error.message.includes('revert') ? 'Invalid input or contract revert. Check inputs and try again.' : error.message);
+            if (error.message.includes('Eip1559NotSupportedError')) {
+                try {
+                    tx = await getContract().methods.addExpense(groupId, description, amount, splitType, customShares).send({
+                        from: await getAccount(),
+                        value: '0',
+                        gasPrice: web3.utils.toWei('50', 'gwei'),
+                        type: '0x0'
+                    });
+                    expenseMessage.textContent = `Expense added! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`;
+                    console.log('Expense added with legacy transaction, tx:', tx.transactionHash);
+                    e.target.reset();
+                    await populateDashboard();
+                } catch (legacyError) {
+                    console.error('Legacy transaction failed:', legacyError);
+                    expenseMessage.textContent = 'Error: Failed to add expense with legacy transaction. Please try again.';
+                }
+            }
+        }
     }
 }
 
