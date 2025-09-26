@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="css/style.css">
     <link rel="icon" href="images/splitbillez_favicon.png">
     <script src="https://cdn.jsdelivr.net/npm/web3@latest/dist/web3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/blockies/0.0.2/blockies.min.js"></script>
 </head>
 <body onload="initWeb3().then(populateDashboard)">
     <header>
@@ -61,6 +62,38 @@
         function getMemberName(address) {
             const memberNames = JSON.parse(localStorage.getItem('memberNames') || '{}');
             return memberNames[address.toLowerCase()] || truncateAddress(address);
+        }
+
+        function getInitials(name) {
+            if (!name || name === 'Unknown') return '?';
+            if (name.startsWith('0x')) return '0';
+            return name.charAt(0).toUpperCase();
+        }
+
+        function createInitialsAvatar(name) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 32;
+            canvas.height = 32;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#007bff';
+            ctx.beginPath();
+            ctx.arc(16, 16, 16, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(getInitials(name), 16, 16);
+            return canvas.toDataURL();
+        }
+
+        function createGroupAvatar(groupId) {
+            const blockie = createIcon({
+                seed: String(groupId),
+                size: 8,
+                scale: 4
+            });
+            return blockie.toDataURL();
         }
 
         async function populateDashboard() {
@@ -144,7 +177,7 @@
                                             payer: expense.payer || 'Unknown',
                                             splitType: expense.splitType || 'Unknown',
                                             timestamp: expense.timestamp && parseInt(expense.timestamp) > 0
-                                                ? new Date(parseInt(expense.timestamp) * 1000).toLocaleDateString()
+                                                ? new Date(parseInt(expense.timestamp) * 1000).toLocaleString()
                                                 : 'N/A'
                                         });
                                     }
@@ -158,18 +191,24 @@
                             }
                         }
                         console.log(`Group ${groupId} expenses:`, expenses);
+                        const groupAvatar = createGroupAvatar(groupId);
                         const groupDiv = document.createElement('div');
                         groupDiv.className = 'group';
                         groupDiv.innerHTML = `
-                            <h3>${name} (ID: ${groupId})</h3>
-                            <p><strong>Members:</strong> ${members.map(addr => getMemberName(addr)).join(', ')}</p>
+                            <h3><img src="${groupAvatar}" class="group-avatar" alt="Group Avatar"> ${name} (ID: ${groupId})</h3>
+                            <p><strong>Members:</strong> ${members.map(addr => `
+                                <span class="member"><img src="${createInitialsAvatar(getMemberName(addr))}" class="user-avatar" alt="User Avatar"> ${getMemberName(addr)}</span>
+                            `).join(', ')}</p>
                             <h4>Expenses:</h4>
                             ${expenses.length > 0 ? expenses.map(exp => `
-                                <p>Expense ${exp.id}: ${exp.description} - ${exp.amount} SHM (Payer: ${getMemberName(exp.payer)}, Split: ${exp.splitType}, Date: ${exp.timestamp})</p>
+                                <p>Expense ${exp.id}: ${exp.description} - ${exp.amount} SHM 
+                                (Payer: <span class="member"><img src="${createInitialsAvatar(getMemberName(exp.payer))}" class="user-avatar" alt="User Avatar"> ${getMemberName(exp.payer)}</span>, 
+                                Split: ${exp.splitType}, Date: ${exp.timestamp})</p>
                             `).join('') : '<p>No expenses found.</p>'}
                             <h4>Balances:</h4>
                             ${balMembers.length > 0 ? balMembers.map((addr, i) => `
-                                <p>${getMemberName(addr)}: ${parseFloat(window.web3().utils.fromWei(balances[i] || '0', 'ether')).toFixed(2)} SHM</p>
+                                <p><span class="member"><img src="${createInitialsAvatar(getMemberName(addr))}" class="user-avatar" alt="User Avatar"> ${getMemberName(addr)}</span>: 
+                                ${parseFloat(window.web3().utils.fromWei(balances[i] || '0', 'ether')).toFixed(2)} SHM</p>
                             `).join('') : '<p>No balances available.</p>'}
                             <h4>Settle Debt</h4>
                             <form id="settleDebtForm-${groupId}" class="settle-debt-form">
