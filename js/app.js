@@ -257,9 +257,30 @@ function getMemberName(address) {
     return memberNames[address?.toLowerCase()] || truncateAddress(address);
 }
 
-function createBlockie(address, size = 32, initial = '') {
+async function loadBlockiesScript() {
+    if (typeof makeBlockie === 'function') return true;
+    return new Promise((resolve) => {
+        const primaryCDN = 'https://cdn.jsdelivr.net/npm/ethereum-blockies-base64@0.1.0/dist/ethereum-blockies-base64.min.js';
+        const fallbackCDN = 'https://unpkg.com/ethereum-blockies-base64@0.1.0/dist/ethereum-blockies-base64.min.js';
+        const script = document.createElement('script');
+        script.src = primaryCDN;
+        script.onload = () => resolve(true);
+        script.onerror = () => {
+            console.warn('Primary Blockies CDN failed, trying fallback CDN');
+            script.src = fallbackCDN;
+            script.onerror = () => {
+                console.error('Fallback Blockies CDN failed');
+                resolve(false);
+            };
+        };
+        document.head.appendChild(script);
+    });
+}
+
+async function createBlockie(address, size = 32, initial = '') {
     try {
-        if (typeof makeBlockie !== 'function') {
+        const blockiesLoaded = await loadBlockiesScript();
+        if (!blockiesLoaded || typeof makeBlockie !== 'function') {
             console.warn('Blockies library not loaded, using fallback image');
             const canvas = document.createElement('canvas');
             canvas.width = size;
@@ -372,7 +393,7 @@ async function populateDashboard() {
         console.log('Total group count from contract:', groupCount);
         const groupIds = new Set();
         let totalAttempts = 0;
-        const maxTotalAttempts = 50; // Reduced to prevent RPC overload
+        const maxTotalAttempts = 50;
         for (let i = 0; i < Math.min(groupCount, 50); i++) {
             let attempts = 3;
             while (attempts > 0 && totalAttempts < maxTotalAttempts) {
@@ -383,7 +404,7 @@ async function populateDashboard() {
                     if (groupId && parseInt(groupId) > 0 && groupId !== "0" && groupId !== "") {
                         groupIds.add(groupId);
                         console.log(`Added groupId ${groupId} at index ${i}`);
-                        break; // Move to next index
+                        break;
                     } else {
                         console.log(`Stopping userGroups scan at index ${i}: invalid groupId ${groupId}`);
                         break;
@@ -402,7 +423,7 @@ async function populateDashboard() {
                 console.log(`Exiting userGroups loop at index ${i}: ${attempts === 0 ? 'failed attempts' : 'max total attempts reached'}`);
                 break;
             }
-            await new Promise(resolve => setTimeout(resolve, 500)); // Throttle between iterations
+            await new Promise(resolve => setTimeout(resolve, 500));
         }
         console.log('Group IDs from userGroups:', Array.from(groupIds));
         if (groupIds.size === 0) {
@@ -417,7 +438,7 @@ async function populateDashboard() {
                 } catch (error) {
                     console.error(`Error fetching group ${i} in fallback scan:`, error);
                 }
-                await new Promise(resolve => setTimeout(resolve, 500)); // Throttle
+                await new Promise(resolve => setTimeout(resolve, 500));
             }
             console.log('Group IDs from fallback scan:', Array.from(groupIds));
         }
@@ -465,21 +486,33 @@ async function populateDashboard() {
                         })() : 'N/A'
                     }));
                 console.log(`Group ${groupId} expenses:`, groupExpenses);
-                const groupBlockie = createBlockie(groupId.toString(), 64);
+                const groupBlockie = await createBlockie(groupId.toString(), 64);
                 const groupDiv = document.createElement('div');
                 groupDiv.className = 'group';
                 groupDiv.innerHTML = `
-                    <img src="${groupBlockie}" alt="Group ${groupId} Avatar" class="group-avatar">
-                    <h3>${name} (ID: ${groupId})</h3>
-                    <p><strong>Members:</strong> ${members.map(addr => {
-                        const initial = getMemberName(addr)[0].toUpperCase();
-                        return `<img src="${createBlockie(addr, 32, initial)}" class="member-avatar" alt="${getMemberName(addr)} Avatar"> ${getMemberName(addr)}`;
-                    }).join(', ')}</p>
+                    <div class="group-header">
+                        <h3>${name} (ID: ${groupId})</h3>
+                        <img src="${groupBlockie}" alt="Group ${groupId} Avatar" class="group-avatar">
+                    </div>
+                    <p><strong>Members:</strong></p>
+                    <div class="members-container">
+                        ${members.map(addr => {
+                            const initial = getMemberName(addr)[0].toUpperCase();
+                            return `<span class="member-item">
+                                <span class="member-name">${getMemberName(addr)}</span>
+                                <img src="${createBlockie(addr, 32, initial)}" class="member-avatar" alt="${getMemberName(addr)} Avatar">
+                            </span>`;
+                        }).join('')}
+                    </div>
                     <h4>Expenses:</h4>
                     <div class="expenses-placeholder">Loading expenses...</div>
                     <h4>Balances:</h4>
                     ${balMembers.length > 0 ? balMembers.map((addr, i) => `
-                        <p><img src="${createBlockie(addr, 32, getMemberName(addr)[0].toUpperCase())}" class="member-avatar" alt="${getMemberName(addr)} Avatar"> ${getMemberName(addr)}: ${parseFloat(web3.utils.fromWei(balances[i] || '0', 'ether')).toFixed(2)} SHM</p>
+                        <div class="member-item">
+                            <span class="member-name">${getMemberName(addr)}</span>
+                            <img src="${createBlockie(addr, 32, getMemberName(addr)[0].toUpperCase())}" class="member-avatar" alt="${getMemberName(addr)} Avatar">
+                            <span>: ${parseFloat(web3.utils.fromWei(balances[i] || '0', 'ether')).toFixed(2)} SHM</span>
+                        </div>
                     `).join('') : '<p>No balances available.</p>'}
                     <h4>Settle Debt</h4>
                     <form id="settleDebtForm-${groupId}" class="settle-debt-form">
@@ -502,7 +535,11 @@ async function populateDashboard() {
                 const expensePromises = groupExpenses.map(exp => exp.timestamp);
                 Promise.all(expensePromises).then(async timestamps => {
                     const expenseElements = groupExpenses.map((exp, idx) => `
-                        <p>Expense ${exp.id}: ${exp.description} - ${exp.amount} SHM (Payer: <img src="${createBlockie(exp.payer, 32, getMemberName(exp.payer)[0].toUpperCase())}" class="member-avatar" alt="${getMemberName(exp.payer)} Avatar"> ${getMemberName(exp.payer)}, Split: ${exp.splitType}, Date: ${timestamps[idx]})</p>
+                        <div class="member-item">
+                            <span class="member-name">Expense ${exp.id}: ${exp.description} - ${exp.amount} SHM</span>
+                            <img src="${await createBlockie(exp.payer, 32, getMemberName(exp.payer)[0].toUpperCase())}" class="member-avatar" alt="${getMemberName(exp.payer)} Avatar">
+                            <span>(Payer: ${getMemberName(exp.payer)}, Split: ${exp.splitType}, Date: ${timestamps[idx]})</span>
+                        </div>
                     `);
                     const expensesHTML = expenseElements.length > 0 ? expenseElements.join('') : '<p>No expenses found.</p>';
                     groupDiv.querySelector('.expenses-placeholder').outerHTML = expensesHTML;
@@ -632,7 +669,7 @@ async function populateGroupDropdown() {
         console.log('Total group count from contract:', groupCount);
         const groupIds = new Set();
         let totalAttempts = 0;
-        const maxTotalAttempts = 50; // Reduced to prevent RPC overload
+        const maxTotalAttempts = 50;
         for (let i = 0; i < Math.min(groupCount, 50); i++) {
             let attempts = 3;
             while (attempts > 0 && totalAttempts < maxTotalAttempts) {
@@ -643,7 +680,7 @@ async function populateGroupDropdown() {
                     if (groupId && parseInt(groupId) > 0 && groupId !== "0" && groupId !== "") {
                         groupIds.add(groupId);
                         console.log(`Added groupId ${groupId} at index ${i}`);
-                        break; // Move to next index
+                        break;
                     } else {
                         console.log(`Stopping userGroups scan at index ${i}: invalid groupId ${groupId}`);
                         break;
@@ -662,7 +699,7 @@ async function populateGroupDropdown() {
                 console.log(`Exiting userGroups loop at index ${i}: ${attempts === 0 ? 'failed attempts' : 'max total attempts reached'}`);
                 break;
             }
-            await new Promise(resolve => setTimeout(resolve, 500)); // Throttle between iterations
+            await new Promise(resolve => setTimeout(resolve, 500));
         }
         console.log('Group IDs from userGroups:', Array.from(groupIds));
         if (groupIds.size === 0) {
@@ -677,7 +714,7 @@ async function populateGroupDropdown() {
                 } catch (error) {
                     console.error(`Error fetching group ${i} in fallback scan:`, error);
                 }
-                await new Promise(resolve => setTimeout(resolve, 500)); // Throttle
+                await new Promise(resolve => setTimeout(resolve, 500));
             }
             console.log('Group IDs from fallback scan:', Array.from(groupIds));
         }
