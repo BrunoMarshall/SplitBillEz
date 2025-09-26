@@ -23,6 +23,8 @@ header {
 
 .logo {
     height: 50px;
+    opacity: 1 !important; /* Remove transparency */
+    background-color: transparent; /* Ensure no background affects visibility */
 }
 
 nav a {
@@ -152,14 +154,15 @@ footer {
 
 .group-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    gap: 10px;
 }
 
 .group-avatar {
     width: 64px;
     height: 64px;
     border-radius: 50%;
+    order: -1; /* Move avatar to the left */
 }
 
 .members-container {
@@ -178,9 +181,35 @@ footer {
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    order: 1; /* Moves avatar to the right */
+    order: -1; /* Move avatar to the left */
 }
 
 .member-name {
-    order: 0; /* Keeps name to the left */
+    order: 0; /* Name follows avatar */
+}
+
+.expense-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.expense-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    order: -1; /* Move avatar to the left of expense */
+}
+
+.balance-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.balance-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    order: -1; /* Move avatar to the left of balance */
 }

@@ -414,6 +414,38 @@ async function fetchExpensesFallback(groupId, expenseCount) {
     return expenses;
 }
 
+async function getDebtAmount(groupId, toAddress) {
+    try {
+        const userAddress = await getAccount();
+        const balanceData = await getContract().methods.getGroupBalances(groupId).call();
+        const balMembers = balanceData.members || balanceData[0] || [];
+        const balances = balanceData.bals || balanceData[1] || [];
+        const userIndex = balMembers.findIndex(addr => addr.toLowerCase() === userAddress.toLowerCase());
+        const toIndex = balMembers.findIndex(addr => addr.toLowerCase() === toAddress.toLowerCase());
+        if (userIndex === -1 || toIndex === -1) {
+            console.log(`User ${userAddress} or recipient ${toAddress} not found in group ${groupId}`);
+            return '0';
+        }
+        const userBalance = parseInt(balances[userIndex]);
+        const toBalance = parseInt(balances[toIndex]);
+        if (userBalance >= 0) {
+            console.log(`User ${userAddress} has non-negative balance (${web3.utils.fromWei(userBalance.toString(), 'ether')} SHM) in group ${groupId}`);
+            return '0';
+        }
+        if (toBalance <= 0) {
+            console.log(`Recipient ${toAddress} has non-positive balance (${web3.utils.fromWei(toBalance.toString(), 'ether')} SHM) in group ${groupId}`);
+            return '0';
+        }
+        const debtAmount = Math.min(Math.abs(userBalance), toBalance);
+        const debtInEther = web3.utils.fromWei(debtAmount.toString(), 'ether');
+        console.log(`Calculated debt for group ${groupId}: ${userAddress} owes ${toAddress} ${debtInEther} SHM`);
+        return debtInEther;
+    } catch (error) {
+        console.error(`Error calculating debt for group ${groupId}, to ${toAddress}:`, error);
+        return '0';
+    }
+}
+
 async function populateDashboard() {
     const dashboardContent = document.getElementById('dashboardContent');
     if (!dashboardContent) {
@@ -572,15 +604,15 @@ async function populateDashboard() {
                 groupDiv.className = 'group';
                 groupDiv.innerHTML = `
                     <div class="group-header">
-                        <h3>${name} (ID: ${groupId})</h3>
                         <img src="${groupBlockie}" alt="Group ${groupId} Avatar" class="group-avatar">
+                        <h3>${name} (ID: ${groupId})</h3>
                     </div>
                     <p><strong>Members:</strong></p>
                     <div class="members-container">
                         ${memberAvatars.map(({ name, avatar }) => `
                             <span class="member-item">
-                                <span class="member-name">${name}</span>
                                 <img src="${avatar}" class="member-avatar" alt="${name} Avatar">
+                                <span class="member-name">${name}</span>
                             </span>
                         `).join('')}
                     </div>
@@ -588,9 +620,9 @@ async function populateDashboard() {
                     <div class="expenses-placeholder">Loading expenses...</div>
                     <h4>Balances:</h4>
                     ${balMembers.length > 0 ? balanceAvatars.map(({ name, avatar }, i) => `
-                        <div class="member-item">
+                        <div class="balance-item">
+                            <img src="${avatar}" class="balance-avatar" alt="${name} Avatar">
                             <span class="member-name">${name}</span>
-                            <img src="${avatar}" class="member-avatar" alt="${name} Avatar">
                             <span>: ${parseFloat(web3.utils.fromWei(balances[i] || '0', 'ether')).toFixed(2)} SHM</span>
                         </div>
                     `).join('') : '<p>No balances available.</p>'}
@@ -606,7 +638,7 @@ async function populateDashboard() {
                                 .join('')}
                         </select>
                         <label for="settleAmount-${groupId}">Amount (SHM):</label>
-                        <input type="number" id="settleAmount-${groupId}" placeholder="e.g., 10" step="0.01" required>
+                        <input type="number" id="settleAmount-${groupId}" placeholder="Select a member to calculate" step="0.01" required>
                         <button type="submit" class="submit-group">Settle Debt</button>
                     </form>
                     <p id="settleMessage-${groupId}"></p>
@@ -621,16 +653,30 @@ async function populateDashboard() {
                         }))
                     );
                     const expenseElements = expenseAvatars.map((exp, idx) => `
-                        <div class="member-item">
+                        <div class="expense-item">
+                            <img src="${exp.avatar}" class="expense-avatar" alt="${getMemberName(exp.payer)} Avatar">
                             <span class="member-name">Expense ${exp.id}: ${exp.description} - ${exp.amount} SHM</span>
-                            <img src="${exp.avatar}" class="member-avatar" alt="${getMemberName(exp.payer)} Avatar">
                             <span>(Payer: ${getMemberName(exp.payer)}, Split: ${exp.splitType}, Date: ${timestamps[idx]})</span>
                         </div>
                     `);
                     const expensesHTML = expenseElements.length > 0 ? expenseElements.join('') : '<p>No expenses found.</p>';
                     groupDiv.querySelector('.expenses-placeholder').outerHTML = expensesHTML;
                 });
-                document.getElementById(`settleDebtForm-${groupId}`).addEventListener('submit', async function(e) {
+                const settleForm = document.getElementById(`settleDebtForm-${groupId}`);
+                const settleToSelect = document.getElementById(`settleTo-${groupId}`);
+                const settleAmountInput = document.getElementById(`settleAmount-${groupId}`);
+                settleToSelect.addEventListener('change', async () => {
+                    const toAddress = settleToSelect.value;
+                    if (toAddress) {
+                        const debtAmount = await getDebtAmount(groupId, toAddress);
+                        settleAmountInput.value = debtAmount !== '0' ? parseFloat(debtAmount).toFixed(2) : '';
+                        settleAmountInput.placeholder = debtAmount !== '0' ? `Owe ${parseFloat(debtAmount).toFixed(2)} SHM` : 'No debt to settle';
+                    } else {
+                        settleAmountInput.value = '';
+                        settleAmountInput.placeholder = 'Select a member to calculate';
+                    }
+                });
+                settleForm.addEventListener('submit', async function(e) {
                     e.preventDefault();
                     if (!web3 || !getContract() || !getAccount()) {
                         alert('Please connect MetaMask first.');
@@ -676,7 +722,7 @@ async function fetchShmPrice() {
     const cacheTimestampKeyPrefix = 'shmPriceTimestamp_';
     const cacheDuration = 10 * 60 * 1000; // 10 minutes
     const now = Date.now();
-    const currencies = ['usd', 'eur', 'inr'];
+    const currencies = ['usd', 'eur', 'inr', 'shm'];
     shmPrice = shmPrice || {};
     
     for (const currency of currencies) {
@@ -692,17 +738,22 @@ async function fetchShmPrice() {
         }
         
         try {
-            console.log(`Fetching SHM price for ${currency} from CoinGecko`);
-            const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=shardeum&vs_currencies=${currency}`);
-            const data = await response.json();
-            const price = data.shardeum?.[currency] || (currency === 'usd' ? 0.11 : currency === 'eur' ? 0.1 : 9.0);
-            shmPrice[currency] = price;
-            console.log(`Fetched SHM price for ${currency}:`, price);
-            localStorage.setItem(cacheKey, JSON.stringify(price));
+            if (currency === 'shm') {
+                shmPrice[currency] = 1; // 1 SHM = 1 SHM
+                console.log(`Set SHM price for ${currency}:`, 1);
+            } else {
+                console.log(`Fetching SHM price for ${currency} from CoinGecko`);
+                const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=shardeum&vs_currencies=${currency}`);
+                const data = await response.json();
+                const price = data.shardeum?.[currency] || (currency === 'usd' ? 0.11 : currency === 'eur' ? 0.1 : 9.0);
+                shmPrice[currency] = price;
+                console.log(`Fetched SHM price for ${currency}:`, price);
+            }
+            localStorage.setItem(cacheKey, JSON.stringify(shmPrice[currency]));
             localStorage.setItem(cacheTimestampKey, now.toString());
         } catch (error) {
             console.error(`Error fetching SHM price for ${currency}:`, error);
-            shmPrice[currency] = currency === 'usd' ? 0.11 : currency === 'eur' ? 0.1 : 9.0;
+            shmPrice[currency] = currency === 'shm' ? 1 : (currency === 'usd' ? 0.11 : currency === 'eur' ? 0.1 : 9.0);
             localStorage.setItem(cacheKey, JSON.stringify(shmPrice[currency]));
             localStorage.setItem(cacheTimestampKey, now.toString());
         }
@@ -721,11 +772,11 @@ function updateShmAmount() {
     const shmAmountElement = document.getElementById('shmAmount');
     if (!shmAmountElement || !amountInput || !currency) return;
     if (!shmPrice || !amountInput.value) {
-        shmAmountElement.textContent = 'SHM Amount: Enter amount and select currency';
+        shmAmountElement.textContent = 'SHM Amount: Enter amount to calculate';
         return;
     }
     const amount = parseFloat(amountInput.value);
-    const shmAmount = amount / shmPrice[currency.value.toLowerCase()];
+    const shmAmount = currency.value.toLowerCase() === 'shm' ? amount : amount / shmPrice[currency.value.toLowerCase()];
     shmAmountElement.textContent = `SHM Amount: ${shmAmount.toFixed(4)} SHM`;
 }
 
@@ -923,23 +974,28 @@ function updateRemoveButtons() {
 
 async function handleExpenseFormSubmit(e) {
     e.preventDefault();
+    console.log('Expense form submitted');
+    const expenseMessage = document.getElementById('expenseMessage');
     if (!web3 || !getContract() || !getAccount()) {
-        alert('Web3 not initialized or wallet not connected. Please ensure MetaMask is installed and connected.');
+        console.error('Web3 not initialized or wallet not connected');
+        expenseMessage.textContent = 'Please connect MetaMask first.';
         return;
     }
     const groupId = document.getElementById('groupId')?.value;
-    const expenseMessage = document.getElementById('expenseMessage');
     const submitButton = document.getElementById('submitButton');
     const groupCreationDiv = document.getElementById('groupCreation');
     if (!expenseMessage || !submitButton || !groupCreationDiv) {
         console.error('Required form elements not found');
+        expenseMessage.textContent = 'Form elements missing. Please refresh the page.';
         return;
     }
     if (groupId === 'create') {
+        console.log('Creating new group');
         const groupName = document.getElementById('groupName')?.value;
         const memberInputs = document.getElementsByClassName('member-input');
         if (!groupName) {
             expenseMessage.textContent = 'Please enter a group name.';
+            console.error('Group name missing');
             return;
         }
         const members = [];
@@ -960,10 +1016,12 @@ async function handleExpenseFormSubmit(e) {
             console.log('Saving member names:', newMemberNames);
             if (members.length < 2) {
                 expenseMessage.textContent = 'Please include at least two valid Ethereum addresses (including yours).';
+                console.error('Insufficient valid members:', members);
                 return;
             }
             if (!members.includes(userAddress)) {
                 expenseMessage.textContent = 'Your address is missing from the member list.';
+                console.error('User address missing from members:', members);
                 return;
             }
             const existingNames = JSON.parse(localStorage.getItem('memberNames') || '{}');
@@ -974,6 +1032,7 @@ async function handleExpenseFormSubmit(e) {
                 type: '0x0'
             });
             expenseMessage.textContent = `Group created! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`;
+            console.log('Group created, tx:', tx.transactionHash);
             groupCreationDiv.style.display = 'none';
             submitButton.textContent = 'Add Expense';
             e.target.reset();
@@ -988,6 +1047,7 @@ async function handleExpenseFormSubmit(e) {
     }
     if (!groupId) {
         expenseMessage.textContent = 'Please select a group.';
+        console.error('No group selected');
         return;
     }
     const description = document.getElementById('description')?.value;
@@ -995,8 +1055,9 @@ async function handleExpenseFormSubmit(e) {
     const currency = document.getElementById('currency')?.value;
     let amount;
     try {
-        const shmAmount = parseFloat(amountInput) / shmPrice[currency.toLowerCase()];
-        amount = web3.utils.toWei(shmAmount.toString(), 'ether');
+        const shmAmount = currency.toLowerCase() === 'shm' ? parseFloat(amountInput) : parseFloat(amountInput) / shmPrice[currency.toLowerCase()];
+        amount = web3.utils.toWei(shmAmount.toFixed(18), 'ether');
+        console.log('Converted amount:', amountInput, currency, 'to', shmAmount, 'SHM');
     } catch (error) {
         console.error('Error converting amount:', error);
         expenseMessage.textContent = 'Invalid amount format or SHM price not loaded. Please try again.';
@@ -1010,89 +1071,106 @@ async function handleExpenseFormSubmit(e) {
             const total = customShares.reduce((sum, val) => sum + val, 0);
             if (total !== 100) {
                 expenseMessage.textContent = 'Custom shares must sum to 100%.';
+                console.error('Custom shares sum invalid:', total);
                 return;
             }
             const [_, members] = await getContract().methods.getGroup(groupId).call();
             if (customShares.length !== members.length) {
                 expenseMessage.textContent = `Custom shares count (${customShares.length}) must match group members (${members.length}).`;
+                console.error('Custom shares count mismatch:', customShares.length, 'vs', members.length);
                 return;
             }
         } catch (error) {
             console.error('Error processing custom shares:', error);
-            expenseMessage.textContent = 'Invalid custom shares format. Use comma-separated percentages (e.g., 40,30,30).';
+            expenseMessage.textContent = 'Invalid custom shares format. Use comma-separated percentages.';
             return;
         }
     }
     try {
+        console.log('Submitting expense:', { groupId, description, amount, splitType, customShares });
         const tx = await getContract().methods.addExpense(groupId, description, amount, splitType, customShares).send({
             from: await getAccount(),
             value: '0',
             type: '0x0'
         });
         expenseMessage.textContent = `Expense added! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`;
+        console.log('Expense added, tx:', tx.transactionHash);
         e.target.reset();
-        document.getElementById('customShares').style.display = 'none';
-        document.getElementById('customLabel').style.display = 'none';
-        await populateGroupDropdown();
+        await populateDashboard();
     } catch (error) {
-        console.error('Expense error:', error);
-        expenseMessage.textContent = 'Error: ' + (error.message.includes('Eip1559NotSupportedError') ? 'Network does not support EIP-1559. Try again.' : error.message.includes('revert') ? 'Invalid input or contract revert. Check group ID and try again.' : error.message);
+        console.error('Expense submission error:', error);
+        expenseMessage.textContent = 'Error: ' + (error.message.includes('Eip1559NotSupportedError') ? 'Network does not support EIP-1559. Try again.' : error.message.includes('revert') ? 'Invalid input or contract revert. Check inputs and try again.' : error.message);
     }
 }
 
-function initExpenseForm() {
+function getContract() {
+    return contract;
+}
+
+async function getAccount() {
+    if (!web3 || !window.ethereum) return null;
+    try {
+        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+        return accounts[0] || null;
+    } catch (error) {
+        console.error('Error getting account:', error);
+        return null;
+    }
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('DOM fully loaded');
+    const metaMaskButton = document.querySelector('.metamask-button');
+    if (metaMaskButton) {
+        metaMaskButton.addEventListener('click', handleMetaMaskToggle);
+    }
     const expenseForm = document.getElementById('expenseForm');
     if (expenseForm) {
         expenseForm.addEventListener('submit', handleExpenseFormSubmit);
+        console.log('Expense form listener added');
+        const splitSelect = document.getElementById('split');
+        if (splitSelect) {
+            splitSelect.addEventListener('change', toggleCustomShares);
+        }
+        const groupSelect = document.getElementById('groupId');
+        if (groupSelect) {
+            groupSelect.addEventListener('change', toggleGroupCreation);
+        }
+        const addMemberButton = document.getElementById('addMemberButton');
+        if (addMemberButton) {
+            addMemberButton.addEventListener('click', addMemberField);
+        }
+        const amountInput = document.getElementById('amount');
+        const currencySelect = document.getElementById('currency');
+        if (amountInput && currencySelect) {
+            amountInput.addEventListener('input', updateShmAmount);
+            currencySelect.addEventListener('change', updateShmAmount);
+            currencySelect.value = 'usd'; // Default to USD
+            await fetchShmPrice();
+            updateShmAmount();
+        }
+        updateRemoveButtons();
+        await checkMetaMaskConnection();
+    } else if (document.getElementById('dashboardContent')) {
+        await checkMetaMaskConnection();
     }
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOMContentLoaded fired, initializing app');
-    initExpenseForm();
-    checkMetaMaskConnection();
-    const buttons = document.querySelectorAll('.metamask-button');
-    buttons.forEach(btn => {
-        btn.addEventListener('click', handleMetaMaskToggle);
+    window.ethereum?.on('accountsChanged', async (accounts) => {
+        console.log('Accounts changed:', accounts);
+        if (accounts.length === 0) {
+            await disconnectWallet();
+        } else {
+            userAccount = accounts[0];
+            contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
+            await updateUI();
+            if (document.getElementById('groupId')) {
+                await populateGroupDropdown();
+            } else if (document.getElementById('dashboardContent')) {
+                await populateDashboard();
+            }
+        }
     });
-    const currencySelect = document.getElementById('currency');
-    if (currencySelect) {
-        currencySelect.addEventListener('change', updateShmAmount);
-    }
-    const groupSelect = document.getElementById('groupId');
-    if (groupSelect) {
-        groupSelect.addEventListener('change', toggleGroupCreation);
-    }
-    const splitSelect = document.getElementById('split');
-    if (splitSelect) {
-        splitSelect.addEventListener('change', toggleCustomShares);
-    }
-    const addMemberButton = document.getElementById('addMemberButton');
-    if (addMemberButton) {
-        addMemberButton.addEventListener('click', addMemberField);
-    }
-    const removeMemberButtons = document.getElementsByClassName('remove-member');
-    Array.from(removeMemberButtons).forEach(btn => {
-        btn.addEventListener('click', () => removeMember(btn));
+    window.ethereum?.on('chainChanged', () => {
+        console.log('Chain changed, reinitializing Web3');
+        window.location.reload();
     });
 });
-
-window.initWeb3 = initWeb3;
-window.disconnectWallet = disconnectWallet;
-window.handleMetaMaskToggle = handleMetaMaskToggle;
-window.getContract = () => contract;
-window.getAccount = () => userAccount;
-window.truncateAddress = truncateAddress;
-window.getMemberName = getMemberName;
-window.createBlockie = createBlockie;
-window.checkMetaMaskConnection = checkMetaMaskConnection;
-window.populateDashboard = populateDashboard;
-window.fetchShmPrice = fetchShmPrice;
-window.updateShmAmount = updateShmAmount;
-window.populateGroupDropdown = populateGroupDropdown;
-window.toggleCustomShares = toggleCustomShares;
-window.toggleGroupCreation = toggleGroupCreation;
-window.addMemberField = addMemberField;
-window.removeMember = removeMember;
-window.updateRemoveButtons = updateRemoveButtons;
-window.initExpenseForm = initExpenseForm;
