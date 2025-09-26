@@ -3,12 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SplitBillEz - Decentralized Bill Splitting</title>
+    <title>SplitBillEz - Split Bills on Shardeum</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="icon" href="images/splitbillez_favicon.png">
     <script src="https://cdn.jsdelivr.net/npm/web3@4.16.0/dist/web3.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ethereum-blockies-base64@0.1.0/dist/ethereum-blockies-base64.min.js"></script>
+    <script src="js/app.js"></script>
 </head>
-<body onload="checkMetaMaskConnection()">
+<body onload="window.checkMetaMaskConnection()">
     <header>
         <div class="header-container">
             <img src="images/splitbillez_logo.png" alt="SplitBillEz Logo" class="logo">
@@ -17,13 +19,14 @@
                 <a href="dashboard.html">Dashboard</a>
                 <a href="add-expense.html">Add Expense</a>
             </nav>
-            <button class="metamask-button" onclick="handleMetaMaskToggle()">Connect with MetaMask</button>
+            <button class="metamask-button" onclick="window.handleMetaMaskToggle()">Connect with MetaMask</button>
         </div>
     </header>
     <main>
         <section>
-            <h2>Welcome to SplitBillEz</h2>
-            <p>Split bills effortlessly using Shardeum's PayFi blockchain. Track expenses, settle instantly with SHM tokens, and enjoy low fees!</p>
+            <h1>Welcome to SplitBillEz</h1>
+            <p>Split bills effortlessly with your friends on the Shardeum blockchain.</p>
+            <p>Connect your MetaMask wallet to get started!</p>
         </section>
     </main>
     <footer>
@@ -49,26 +52,5 @@
             </a>
         </div>
     </footer>
-    <script src="js/app.js"></script>
-    <script>
-        async function checkMetaMaskConnection() {
-            console.log('Checking MetaMask connection on page load...');
-            try {
-                if (window.ethereum) {
-                    console.log('MetaMask provider detected');
-                    if (!window.web3 || !window.web3.utils) {
-                        console.log('Initializing Web3...');
-                        await window.initWeb3();
-                    }
-                    const account = await window.getAccount();
-                    console.log('MetaMask connected on load:', account);
-                } else {
-                    console.log('MetaMask not detected');
-                }
-            } catch (error) {
-                console.error('Error checking MetaMask connection:', error);
-            }
-        }
-    </script>
 </body>
 </html>

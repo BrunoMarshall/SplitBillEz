@@ -28,45 +28,51 @@
             <form id="expenseForm">
                 <label for="description">Description:</label>
                 <input type="text" id="description" placeholder="e.g., Dinner at Restaurant" required>
+                
+                <label for="amount">Amount:</label>
+                <input type="number" id="amount" placeholder="e.g., 100" step="0.01" required>
+                
                 <label for="currency">Currency:</label>
-                <select id="currency" onchange="window.updateShmAmount()" required>
-                    <option value="EUR">EUR</option>
+                <select id="currency" onchange="window.updateShmAmount()">
                     <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
                     <option value="INR">INR</option>
                 </select>
-                <label for="amount">Amount:</label>
-                <input type="number" id="amount" placeholder="e.g., 100" step="0.01" oninput="window.updateShmAmount()" required>
-                <p id="shmAmount">SHM Amount: Calculating...</p>
-                <label for="split">Split Type:</label>
-                <select id="split" onchange="window.toggleCustomShares()" required>
-                    <option value="equal">Equal</option>
-                    <option value="custom">Custom (% shares, sum to 100)</option>
-                </select>
-                <label for="customShares" id="customLabel" style="display:none;">Custom Shares (%, comma-separated):</label>
-                <input type="text" id="customShares" placeholder="e.g., 40,30,30" style="display:none;">
+                <p id="shmAmount">SHM Amount: Enter amount and select currency</p>
+                
                 <label for="groupId">Group:</label>
                 <select id="groupId" onchange="window.toggleGroupCreation()" required>
-                    <option value="" disabled selected>Select a group</option>
+                    <option value="" disabled selected>Loading groups...</option>
                 </select>
-                <div id="groupCreation" style="display:none;">
-                    <h3>Create a New Group</h3>
+                
+                <div id="groupCreation" style="display: none;">
+                    <h3>Create New Group</h3>
                     <label for="groupName">Group Name:</label>
-                    <input type="text" id="groupName" placeholder="e.g., Trip to Goa">
-                    <label>Member Addresses:</label>
+                    <input type="text" id="groupName" placeholder="e.g., Friends Trip">
                     <div id="memberInputs">
                         <div class="member-input">
-                            <input type="text" class="member-name" value="Me" readonly>
+                            <input type="text" class="member-name" placeholder="Your Name (e.g., Alice)">
                             <input type="text" class="member-address" id="userAddress" readonly>
-                            <span class="member-label">Your Address</span>
+                            <button type="button" class="remove-member" style="display: none;" onclick="window.removeMember(this)">Remove</button>
                         </div>
                         <div class="member-input">
                             <input type="text" class="member-name" placeholder="Member Name (e.g., Bob)">
                             <input type="text" class="member-address" placeholder="e.g., 0x742d...">
-                            <button type="button" class="remove-member" onclick="window.removeMember(this)">Remove</button>
+                            <button type="button" class="remove-member" style="display: none;" onclick="window.removeMember(this)">Remove</button>
                         </div>
                     </div>
                     <button type="button" onclick="window.addMemberField()">Add Member</button>
                 </div>
+                
+                <label for="split">Split Type:</label>
+                <select id="split" onchange="window.toggleCustomShares()">
+                    <option value="equal">Equal</option>
+                    <option value="custom">Custom</option>
+                </select>
+                
+                <label id="customLabel" style="display: none;">Custom Shares (%):</label>
+                <input type="text" id="customShares" placeholder="e.g., 40,30,30" style="display: none;">
+                
                 <button type="submit" id="submitButton" class="submit-group">Add Expense</button>
                 <p id="expenseMessage"></p>
             </form>

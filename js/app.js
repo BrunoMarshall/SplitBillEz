@@ -1,7 +1,158 @@
 // app.js - Shared Web3 Integration for SplitBillEz
 const CONTRACT_ADDRESS = '0x4fbe28ddd98ed3c0a2506d28980d73732f85d04f';
 const CONTRACT_ABI = [
-    // ABI unchanged from your provided version
+    {
+        "inputs": [],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": false, "internalType": "uint256", "name": "expenseId", "type": "uint256"},
+            {"indexed": false, "internalType": "uint256", "name": "groupId", "type": "uint256"},
+            {"indexed": false, "internalType": "string", "name": "description", "type": "string"},
+            {"indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256"}
+        ],
+        "name": "ExpenseAdded",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": false, "internalType": "uint256", "name": "groupId", "type": "uint256"},
+            {"indexed": false, "internalType": "string", "name": "name", "type": "string"},
+            {"indexed": false, "internalType": "address[]", "name": "members", "type": "address[]"}
+        ],
+        "name": "GroupCreated",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": false, "internalType": "uint256", "name": "groupId", "type": "uint256"},
+            {"indexed": false, "internalType": "address", "name": "debtor", "type": "address"},
+            {"indexed": false, "internalType": "address", "name": "creditor", "type": "address"},
+            {"indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256"}
+        ],
+        "name": "DebtRecorded",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": false, "internalType": "uint256", "name": "groupId", "type": "uint256"},
+            {"indexed": false, "internalType": "address", "name": "from", "type": "address"},
+            {"indexed": false, "internalType": "address", "name": "to", "type": "address"},
+            {"indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256"}
+        ],
+        "name": "DebtSettled",
+        "type": "event"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "name": "expenses",
+        "outputs": [
+            {"internalType": "string", "name": "description", "type": "string"},
+            {"internalType": "uint256", "name": "amount", "type": "uint256"},
+            {"internalType": "address", "name": "payer", "type": "address"},
+            {"internalType": "string", "name": "splitType", "type": "string"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "_groupId", "type": "uint256"}],
+        "name": "getGroup",
+        "outputs": [
+            {"internalType": "string", "name": "name", "type": "string"},
+            {"internalType": "address[]", "name": "members", "type": "address[]"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "_groupId", "type": "uint256"}],
+        "name": "getGroupBalances",
+        "outputs": [
+            {"internalType": "address[]", "name": "members", "type": "address[]"},
+            {"internalType": "int256[]", "name": "bals", "type": "int256[]"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "string", "name": "_name", "type": "string"},
+            {"internalType": "address[]", "name": "_members", "type": "address[]"}
+        ],
+        "name": "createGroup",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256", "name": "_groupId", "type": "uint256"},
+            {"internalType": "string", "name": "_description", "type": "string"},
+            {"internalType": "uint256", "name": "_amount", "type": "uint256"},
+            {"internalType": "string", "name": "_splitType", "type": "string"},
+            {"internalType": "uint256[]", "name": "_customShares", "type": "uint256[]"}
+        ],
+        "name": "addExpense",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256", "name": "_groupId", "type": "uint256"},
+            {"internalType": "address", "name": "_to", "type": "address"},
+            {"internalType": "uint256", "name": "_amount", "type": "uint256"}
+        ],
+        "name": "settleDebt",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "owner",
+        "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "ownerWithdraw",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "groupCount",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "expenseCount",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "", "type": "address"},
+            {"internalType": "uint256", "name": "", "type": "uint256"}
+        ],
+        "name": "userGroups",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    }
 ];
 
 let web3;
@@ -170,6 +321,7 @@ async function checkMetaMaskConnection() {
             }
             return;
         }
+        console.log('MetaMask provider detected');
         if (!web3 || !web3.utils) {
             console.log('Initializing Web3...');
             await initWeb3();
@@ -541,7 +693,7 @@ async function handleExpenseFormSubmit(e) {
         alert('Web3 not initialized or wallet not connected. Please ensure MetaMask is installed and connected.');
         return;
     }
-    const groupId = document.getElementById('groupId').value;
+    const groupId = document.getElementById('groupId')?.value;
     const expenseMessage = document.getElementById('expenseMessage');
     const submitButton = document.getElementById('submitButton');
     const groupCreationDiv = document.getElementById('groupCreation');
@@ -550,7 +702,7 @@ async function handleExpenseFormSubmit(e) {
         return;
     }
     if (groupId === 'create') {
-        const groupName = document.getElementById('groupName').value;
+        const groupName = document.getElementById('groupName')?.value;
         const memberInputs = document.getElementsByClassName('member-input');
         if (!groupName) {
             expenseMessage.textContent = 'Please enter a group name.';
@@ -563,9 +715,9 @@ async function handleExpenseFormSubmit(e) {
             for (let input of Array.from(memberInputs)) {
                 const addressInput = input.querySelector('.member-address');
                 const nameInput = input.querySelector('.member-name');
-                const address = addressInput ? addressInput.value.trim().toLowerCase() : '';
-                const name = nameInput ? nameInput.value.trim() : '';
-                if (address && web3.utils.isAddress(address) || address === userAddress) {
+                const address = addressInput?.value?.trim().toLowerCase() || '';
+                const name = nameInput?.value?.trim() || '';
+                if (address && web3?.utils?.isAddress && (web3.utils.isAddress(address) || address === userAddress)) {
                     members.push(address);
                     if (name) newMemberNames[address] = name;
                 }
@@ -604,9 +756,9 @@ async function handleExpenseFormSubmit(e) {
         expenseMessage.textContent = 'Please select a group.';
         return;
     }
-    const description = document.getElementById('description').value;
-    const amountInput = document.getElementById('amount').value;
-    const currency = document.getElementById('currency').value;
+    const description = document.getElementById('description')?.value;
+    const amountInput = document.getElementById('amount')?.value;
+    const currency = document.getElementById('currency')?.value;
     let amount;
     try {
         const shmAmount = parseFloat(amountInput) / shmPrice[currency.toLowerCase()];
@@ -616,11 +768,11 @@ async function handleExpenseFormSubmit(e) {
         expenseMessage.textContent = 'Invalid amount format or SHM price not loaded. Please try again.';
         return;
     }
-    const splitType = document.getElementById('split').value;
+    const splitType = document.getElementById('split')?.value;
     let customShares = [];
     if (splitType === 'custom') {
         try {
-            customShares = document.getElementById('customShares').value.split(',').map(s => parseInt(s.trim()));
+            customShares = document.getElementById('customShares')?.value.split(',').map(s => parseInt(s.trim()));
             const total = customShares.reduce((sum, val) => sum + val, 0);
             if (total !== 100) {
                 expenseMessage.textContent = 'Custom shares must sum to 100%.';
