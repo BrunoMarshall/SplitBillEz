@@ -159,7 +159,7 @@ let web3;
 let userAccount;
 let contract;
 let shmPrice = null;
-const RPC_URLS = ['https://cycle3.api.shardeum.org', 'https://api-unstable.shardeum.org'];
+const RPC_URLS = ['https://api-unstable.shardeum.org', 'https://cycle3.api.shardeum.org', 'https://dapps.shardeum.org'];
 
 async function initWeb3(rpcIndex = 0) {
     if (!window.ethereum) {
@@ -203,9 +203,11 @@ async function initWeb3(rpcIndex = 0) {
         console.error(`Error initializing Web3 with RPC ${RPC_URLS[rpcIndex]}:`, error);
         if (rpcIndex < RPC_URLS.length - 1) {
             console.log(`Retrying with next RPC: ${RPC_URLS[rpcIndex + 1]}`);
+            await new Promise(resolve => setTimeout(resolve, 2000)); // 2-second delay before retry
             return await initWeb3(rpcIndex + 1);
         }
-        alert('Failed to connect to MetaMask: ' + error.message);
+        alert('Failed to connect to MetaMask or RPC endpoints: ' + error.message);
+        console.error('All RPC endpoints failed:', RPC_URLS);
         return false;
     }
 }
@@ -665,7 +667,7 @@ async function populateDashboard() {
         }
     } catch (error) {
         console.error('Error populating dashboard:', error);
-        dashboardContent.innerHTML = '<p>Error loading groups. Please verify your MetaMask account and try again.</p>';
+        dashboardContent.innerHTML = '<p>Error loading groups: ' + error.message + '. Please check your MetaMask connection and try again.</p>';
     }
 }
 
@@ -764,7 +766,7 @@ async function populateGroupDropdown() {
                     console.log(`Raw userGroups[${i}]:`, groupId);
                     if (groupId && parseInt(groupId) > 0 && groupId !== "0" && groupId !== "") {
                         groupIds.add(groupId);
-                        console.log(`Added groupId ${i} at index ${i}`);
+                        console.log(`Added groupId ${groupId} at index ${i}`);
                         break;
                     } else {
                         console.log(`Skipping userGroups[${i}]: invalid groupId ${groupId}`);
@@ -853,7 +855,7 @@ async function populateGroupDropdown() {
         groupSelect.innerHTML = '<option value="" disabled selected>Error loading groups</option><option value="create">Create a new group</option>';
         groupCreationDiv.style.display = 'block';
         submitButton.textContent = 'Create Group';
-        expenseMessage.textContent = 'Error loading groups. Please create a new group or verify your MetaMask account.';
+        expenseMessage.textContent = 'Error loading groups: ' + error.message + '. Please check your MetaMask connection and try again.';
     }
 }
 
