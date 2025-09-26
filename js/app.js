@@ -147,6 +147,7 @@ const CONTRACT_ABI = [
                 "type": "uint256"
             },
             {
+                "indexed": false,
                 "internalType": "address",
                 "name": "payer",
                 "type": "address"
@@ -460,4 +461,4 @@ window.disconnectWallet = disconnectWallet;
 window.handleMetaMaskToggle = handleMetaMaskToggle;
 window.getContract = () => contract;
 window.getAccount = () => userAccount;
-window.web3 = web3; // Fix: Assign Web3 instance directly
+window.web3 = () => web3;
