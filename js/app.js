@@ -161,18 +161,31 @@ let contract;
 let shmPrice = null;
 const RPC_URLS = ['https://api-unstable.shardeum.org', 'https://cycle3.api.shardeum.org', 'https://dapps.shardeum.org'];
 
+function isMobileDevice() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
 async function initWeb3(rpcIndex = 0) {
+    console.log('Initializing Web3 for', isMobileDevice() ? 'mobile' : 'desktop');
     if (!window.ethereum) {
-        alert('MetaMask is not installed. Please install MetaMask and refresh the page.');
-        console.error('MetaMask not detected');
+        if (isMobileDevice()) {
+            alert('Please open this page in the MetaMask browser or ensure MetaMask is installed and accessible.');
+            console.error('MetaMask not detected on mobile');
+        } else {
+            alert('MetaMask is not installed. Please install MetaMask and refresh the page.');
+            console.error('MetaMask not detected on desktop');
+        }
         return false;
     }
     try {
-        web3 = new Web3(new Web3.providers.HttpProvider(RPC_URLS[rpcIndex]));
-        console.log(`Web3 initialized with RPC ${RPC_URLS[rpcIndex]}:`, !!web3, 'Version:', Web3.version);
+        // Use window.ethereum directly for mobile to leverage MetaMask's injected provider
+        web3 = new Web3(isMobileDevice() ? window.ethereum : new Web3.providers.HttpProvider(RPC_URLS[rpcIndex]));
+        console.log(`Web3 initialized with ${isMobileDevice() ? 'window.ethereum' : 'RPC ' + RPC_URLS[rpcIndex]}:`, !!web3, 'Version:', Web3.version);
+        
+        // Ensure Shardeum Unstable Testnet (chainId: 8080)
         await window.ethereum.request({
             method: 'wallet_switchEthereumChain',
-            params: [{ chainId: '0x1f90' }] // Shardeum Unstable Testnet (8080)
+            params: [{ chainId: '0x1f90' }]
         }).catch(async (switchError) => {
             if (switchError.code === 4902) {
                 await window.ethereum.request({
@@ -189,6 +202,8 @@ async function initWeb3(rpcIndex = 0) {
                 throw switchError;
             }
         });
+
+        // Request accounts
         const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
         if (!accounts || accounts.length === 0) {
             throw new Error('No accounts returned by MetaMask');
@@ -201,7 +216,7 @@ async function initWeb3(rpcIndex = 0) {
         return true;
     } catch (error) {
         console.error(`Error initializing Web3 with RPC ${RPC_URLS[rpcIndex]}:`, error);
-        if (rpcIndex < RPC_URLS.length - 1) {
+        if (!isMobileDevice() && rpcIndex < RPC_URLS.length - 1) {
             console.log(`Retrying with next RPC: ${RPC_URLS[rpcIndex + 1]}`);
             await new Promise(resolve => setTimeout(resolve, 2000)); // 2-second delay before retry
             return await initWeb3(rpcIndex + 1);
@@ -350,11 +365,14 @@ async function checkMetaMaskConnection() {
     console.log('Checking MetaMask connection on page load...');
     try {
         if (!window.ethereum) {
-            console.log('MetaMask not detected');
+            const message = isMobileDevice() 
+                ? 'Please open this page in the MetaMask browser or ensure MetaMask is installed and accessible.'
+                : 'MetaMask not detected. Please install MetaMask and refresh.';
+            console.log(message);
             if (document.getElementById('dashboardContent')) {
-                document.getElementById('dashboardContent').innerHTML = 'MetaMask not detected. Please install MetaMask and refresh.';
+                document.getElementById('dashboardContent').innerHTML = message;
             } else if (document.getElementById('expenseMessage')) {
-                document.getElementById('expenseMessage').textContent = 'MetaMask not detected. Please install MetaMask and refresh.';
+                document.getElementById('expenseMessage').textContent = message;
             }
             return;
         }
@@ -383,10 +401,11 @@ async function checkMetaMaskConnection() {
         }
     } catch (error) {
         console.error('Error checking MetaMask connection:', error);
+        const message = 'Error checking MetaMask connection: ' + error.message + '. Please refresh and reconnect MetaMask.';
         if (document.getElementById('dashboardContent')) {
-            document.getElementById('dashboardContent').innerHTML = 'Error checking MetaMask connection: ' + error.message + '. Please refresh and reconnect MetaMask.';
+            document.getElementById('dashboardContent').innerHTML = message;
         } else if (document.getElementById('expenseMessage')) {
-            document.getElementById('expenseMessage').textContent = 'Error checking MetaMask connection: ' + error.message + '. Please refresh and reconnect MetaMask.';
+            document.getElementById('expenseMessage').textContent = message;
         }
     }
 }
