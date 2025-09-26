@@ -459,6 +459,18 @@ async function populateDashboard() {
                     console.warn(`Group ${groupId} has invalid members array:`, members);
                     continue;
                 }
+                // Pre-resolve all avatars
+                const groupBlockie = await createBlockie(groupId.toString(), 64);
+                const memberAvatars = await Promise.all(
+                    members.map(async addr => {
+                        const initial = getMemberName(addr)[0].toUpperCase();
+                        return {
+                            addr,
+                            name: getMemberName(addr),
+                            avatar: await createBlockie(addr, 32, initial)
+                        };
+                    })
+                );
                 let balMembers = [], balances = [];
                 try {
                     const balanceData = await getContract().methods.getGroupBalances(groupId).call();
@@ -468,6 +480,13 @@ async function populateDashboard() {
                 } catch (error) {
                     console.error(`Error fetching balances for group ${groupId}:`, error);
                 }
+                const balanceAvatars = await Promise.all(
+                    balMembers.map(async addr => ({
+                        addr,
+                        name: getMemberName(addr),
+                        avatar: await createBlockie(addr, 32, getMemberName(addr)[0].toUpperCase())
+                    }))
+                );
                 const groupExpenses = events
                     .filter(event => String(event.returnValues.groupId) === String(groupId))
                     .map(event => ({
@@ -486,7 +505,6 @@ async function populateDashboard() {
                         })() : 'N/A'
                     }));
                 console.log(`Group ${groupId} expenses:`, groupExpenses);
-                const groupBlockie = await createBlockie(groupId.toString(), 64);
                 const groupDiv = document.createElement('div');
                 groupDiv.className = 'group';
                 groupDiv.innerHTML = `
@@ -496,21 +514,20 @@ async function populateDashboard() {
                     </div>
                     <p><strong>Members:</strong></p>
                     <div class="members-container">
-                        ${members.map(addr => {
-                            const initial = getMemberName(addr)[0].toUpperCase();
-                            return `<span class="member-item">
-                                <span class="member-name">${getMemberName(addr)}</span>
-                                <img src="${createBlockie(addr, 32, initial)}" class="member-avatar" alt="${getMemberName(addr)} Avatar">
-                            </span>`;
-                        }).join('')}
+                        ${memberAvatars.map(({ name, avatar }) => `
+                            <span class="member-item">
+                                <span class="member-name">${name}</span>
+                                <img src="${avatar}" class="member-avatar" alt="${name} Avatar">
+                            </span>
+                        `).join('')}
                     </div>
                     <h4>Expenses:</h4>
                     <div class="expenses-placeholder">Loading expenses...</div>
                     <h4>Balances:</h4>
-                    ${balMembers.length > 0 ? balMembers.map((addr, i) => `
+                    ${balMembers.length > 0 ? balanceAvatars.map(({ name, avatar }, i) => `
                         <div class="member-item">
-                            <span class="member-name">${getMemberName(addr)}</span>
-                            <img src="${createBlockie(addr, 32, getMemberName(addr)[0].toUpperCase())}" class="member-avatar" alt="${getMemberName(addr)} Avatar">
+                            <span class="member-name">${name}</span>
+                            <img src="${avatar}" class="member-avatar" alt="${name} Avatar">
                             <span>: ${parseFloat(web3.utils.fromWei(balances[i] || '0', 'ether')).toFixed(2)} SHM</span>
                         </div>
                     `).join('') : '<p>No balances available.</p>'}
@@ -534,10 +551,16 @@ async function populateDashboard() {
                 dashboardContent.appendChild(groupDiv);
                 const expensePromises = groupExpenses.map(exp => exp.timestamp);
                 Promise.all(expensePromises).then(async timestamps => {
-                    const expenseElements = groupExpenses.map((exp, idx) => `
+                    const expenseAvatars = await Promise.all(
+                        groupExpenses.map(async exp => ({
+                            ...exp,
+                            avatar: await createBlockie(exp.payer, 32, getMemberName(exp.payer)[0].toUpperCase())
+                        }))
+                    );
+                    const expenseElements = expenseAvatars.map((exp, idx) => `
                         <div class="member-item">
                             <span class="member-name">Expense ${exp.id}: ${exp.description} - ${exp.amount} SHM</span>
-                            <img src="${await createBlockie(exp.payer, 32, getMemberName(exp.payer)[0].toUpperCase())}" class="member-avatar" alt="${getMemberName(exp.payer)} Avatar">
+                            <img src="${exp.avatar}" class="member-avatar" alt="${getMemberName(exp.payer)} Avatar">
                             <span>(Payer: ${getMemberName(exp.payer)}, Split: ${exp.splitType}, Date: ${timestamps[idx]})</span>
                         </div>
                     `);
