@@ -914,16 +914,16 @@ async function handleExpenseFormSubmit(e) {
         const newMemberNames = {};
         try {
             const userAddress = (await getAccount()).toLowerCase();
-            Array.from(memberInputs).forEach(input => {
+            for (let input of Array.from(memberInputs)) {
                 const addressInput = input.querySelector('.member-address');
                 const nameInput = input.querySelector('.member-name');
                 const address = addressInput ? addressInput.value.trim().toLowerCase() : '';
                 const name = nameInput ? nameInput.value.trim() : '';
-                if (address && (web3.utils.isAddress(address) || address === userAddress)) {
+                if (address && web3.utils && web3.utils.isAddress && (web3.utils.isAddress(address) || address === userAddress)) {
                     members.push(address);
                     if (name) newMemberNames[address] = name;
                 }
-            });
+            }
             console.log('Submitting members:', members);
             console.log('Saving member names:', newMemberNames);
             if (members.length < 2) {
