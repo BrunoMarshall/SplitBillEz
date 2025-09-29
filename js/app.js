@@ -437,7 +437,6 @@ async function checkMetaMaskConnection() {
         if (account) {
             if (document.getElementById('userAddress')) {
                 document.getElementById('userAddress').value = account;
-                await fetchShmPrice();
                 await populateGroupDropdown();
             } else if (document.getElementById('dashboardContent')) {
                 await populateDashboard();
@@ -621,34 +620,36 @@ async function populateDashboard() {
         const groupCount = parseInt(await getContract().methods.groupCount().call()) || 0;
         console.log('Total group count from contract:', groupCount);
         const groupIds = new Set();
+        // Primary scan: userGroups array
         for (let i = 0; i < Math.min(groupCount, 50); i++) {
             try {
                 const groupId = await getContract().methods.userGroups(userAddress, i).call();
                 if (groupId && parseInt(groupId) > 0) {
                     groupIds.add(groupId.toString());
-                    console.log(`Added groupId ${groupId} at index ${i}`);
+                    console.log(`Added groupId ${groupId} at index ${i} from userGroups`);
                 }
             } catch (error) {
-                console.error(`Error fetching userGroups[${i}]:`, error);
+                console.log(`userGroups[${i}] reverted or empty, skipping`);
                 if (error.message.includes('execution reverted')) {
                     break;
                 }
             }
         }
-        if (groupIds.size === 0) {
-            console.log('No groups found in userGroups, attempting fallback group scan');
-            for (let i = 1; i <= groupCount && i <= 50; i++) {
-                try {
-                    const result = await getContract().methods.getGroup(i).call();
-                    const members = result.members || result[1] || [];
-                    if (members.map(addr => addr.toLowerCase()).includes(userAddress.toLowerCase())) {
-                        groupIds.add(i.toString());
-                    }
-                } catch (error) {
-                    console.error(`Error fetching group ${i} in fallback scan:`, error);
+        // Enhanced fallback: Scan all groups and check membership
+        console.log('Running enhanced fallback scan for all groups...');
+        for (let i = 1; i <= groupCount; i++) {
+            try {
+                const result = await getContract().methods.getGroup(i).call();
+                const members = result.members || result[1] || [];
+                if (members && Array.isArray(members) && members.map(addr => addr.toLowerCase()).includes(userAddress.toLowerCase())) {
+                    groupIds.add(i.toString());
+                    console.log(`Added groupId ${i} from fallback scan (user is member)`);
                 }
+            } catch (error) {
+                console.log(`Group ${i} does not exist or access denied`);
             }
         }
+        console.log('Final group IDs found:', Array.from(groupIds));
         if (groupIds.size === 0) {
             dashboardContent.innerHTML = '<p>No groups found for this account. Create one in the Add Expense page or verify your MetaMask account.</p>';
             return;
@@ -685,6 +686,7 @@ async function populateDashboard() {
                     }))
                 );
                 const expenseIds = await getContract().methods.getGroupExpenseIds(groupId).call();
+                console.log(`Group ${groupId} expense IDs:`, expenseIds);
                 const groupExpenses = await Promise.all(
                     expenseIds.map(async expenseId => {
                         try {
@@ -809,6 +811,7 @@ async function populateDashboard() {
                 `);
                 const expensesHTML = expenseElements.length > 0 ? expenseElements.join('') : '<p>No expenses found.</p>';
                 groupDiv.querySelector('.expenses-placeholder').outerHTML = expensesHTML;
+                // Event listeners for settlement form (same as before)
                 const settleForm = document.getElementById(`settleDebtForm-${groupId}`);
                 const settleToSelect = document.getElementById(`settleTo-${groupId}`);
                 const settleAmountInput = document.getElementById(`settleAmount-${groupId}`);
@@ -890,7 +893,7 @@ async function populateDashboard() {
 async function fetchShmPrice() {
     const cacheKeyPrefix = 'shmPriceCache_';
     const cacheTimestampKeyPrefix = 'shmPriceTimestamp_';
-    const cacheDuration = 10 * 60 * 1000;
+    const cacheDuration = 10 * 60 * 1000; // 10 minutes
     const now = Date.now();
     const currencies = ['usd', 'eur', 'inr', 'shm'];
     shmPrice = shmPrice || {};
@@ -914,8 +917,14 @@ async function fetchShmPrice() {
             } else {
                 console.log(`Fetching SHM price for ${currency} from CoinGecko`);
                 const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=shardeum&vs_currencies=${currency}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
                 const data = await response.json();
-                const price = data.shardeum?.[currency] || (currency === 'usd' ? 0.11 : currency === 'eur' ? 0.1 : 9.0);
+                const price = data.shardeum?.[currency];
+                if (price === undefined) {
+                    throw new Error('SHM price not found in response');
+                }
                 shmPrice[currency] = price;
                 console.log(`Fetched SHM price for ${currency}:`, price);
             }
@@ -923,15 +932,34 @@ async function fetchShmPrice() {
             localStorage.setItem(cacheTimestampKey, now.toString());
         } catch (error) {
             console.error(`Error fetching SHM price for ${currency}:`, error);
+            // Use fallback defaults
             shmPrice[currency] = currency === 'shm' ? 1 : (currency === 'usd' ? 0.11 : currency === 'eur' ? 0.1 : 9.0);
             localStorage.setItem(cacheKey, JSON.stringify(shmPrice[currency]));
             localStorage.setItem(cacheTimestampKey, now.toString());
+            console.log(`Using fallback SHM price for ${currency}:`, shmPrice[currency]);
         }
     }
 
     const shmAmountElement = document.getElementById('shmAmount');
-    if (shmAmountElement && !Object.keys(shmPrice).length) {
-        shmAmountElement.textContent = 'Error fetching SHM price. Using default.';
+    if (shmAmountElement) {
+        if (Object.keys(shmPrice).length > 0) {
+            shmAmountElement.textContent = 'SHM Amount: Ready (fetched prices)';
+            // Add refresh button for debugging
+            let refreshBtn = document.getElementById('refreshPriceBtn');
+            if (!refreshBtn) {
+                refreshBtn = document.createElement('button');
+                refreshBtn.id = 'refreshPriceBtn';
+                refreshBtn.textContent = 'Refresh Price';
+                refreshBtn.type = 'button';
+                refreshBtn.style.marginLeft = '10px';
+                refreshBtn.style.backgroundColor = '#007bff';
+                refreshBtn.style.color = 'white';
+                refreshBtn.onclick = fetchShmPrice;
+                shmAmountElement.parentNode.appendChild(refreshBtn);
+            }
+        } else {
+            shmAmountElement.textContent = 'Error fetching SHM price. Using defaults. Check console.';
+        }
     }
     updateShmAmount();
 }
@@ -946,8 +974,25 @@ function updateShmAmount() {
         return;
     }
     const amount = parseFloat(amountInput.value);
-    const shmAmount = currency.value.toLowerCase() === 'shm' ? amount : amount / shmPrice[currency.value.toLowerCase()];
+    if (isNaN(amount) || amount <= 0) {
+        shmAmountElement.textContent = 'SHM Amount: Enter a valid amount';
+        return;
+    }
+    const selectedCurrency = currency.value.toLowerCase();
+    let shmAmount;
+    if (selectedCurrency === 'shm') {
+        shmAmount = amount;
+    } else {
+        const price = shmPrice[selectedCurrency];
+        if (price === undefined || price <= 0) {
+            console.error('Invalid SHM price for currency:', selectedCurrency);
+            shmAmountElement.textContent = 'Error: Invalid price data. Refresh price.';
+            return;
+        }
+        shmAmount = amount / price;
+    }
     shmAmountElement.textContent = `SHM Amount: ${shmAmount.toFixed(4)} SHM`;
+    console.log(`Calculated SHM: ${amount} ${selectedCurrency.toUpperCase()} = ${shmAmount.toFixed(4)} SHM (price: ${shmPrice[selectedCurrency]})`);
 }
 
 async function populateGroupDropdown() {
@@ -973,34 +1018,38 @@ async function populateGroupDropdown() {
         console.log('Fetching groups for:', userAddress);
         document.getElementById('userAddress').value = userAddress;
         const groupCount = parseInt(await getContract().methods.groupCount().call()) || 0;
+        console.log('Total group count from contract:', groupCount);
         const groupIds = new Set();
+        // Primary scan: userGroups array
         for (let i = 0; i < Math.min(groupCount, 50); i++) {
             try {
                 const groupId = await getContract().methods.userGroups(userAddress, i).call();
                 if (groupId && parseInt(groupId) > 0) {
                     groupIds.add(groupId.toString());
+                    console.log(`Added groupId ${groupId} at index ${i} from userGroups`);
                 }
             } catch (error) {
-                console.error(`Error fetching userGroups[${i}]:`, error);
+                console.log(`userGroups[${i}] reverted or empty, skipping`);
                 if (error.message.includes('execution reverted')) {
                     break;
                 }
             }
         }
-        if (groupIds.size === 0) {
-            console.log('No groups found in userGroups, attempting fallback group scan');
-            for (let i = 1; i <= groupCount && i <= 50; i++) {
-                try {
-                    const result = await getContract().methods.getGroup(i).call();
-                    const members = result.members || result[1] || [];
-                    if (members.map(addr => addr.toLowerCase()).includes(userAddress.toLowerCase())) {
-                        groupIds.add(i.toString());
-                    }
-                } catch (error) {
-                    console.error(`Error fetching group ${i} in fallback scan:`, error);
+        // Enhanced fallback: Scan all groups and check membership
+        console.log('Running enhanced fallback scan for all groups...');
+        for (let i = 1; i <= groupCount; i++) {
+            try {
+                const result = await getContract().methods.getGroup(i).call();
+                const members = result.members || result[1] || [];
+                if (members && Array.isArray(members) && members.map(addr => addr.toLowerCase()).includes(userAddress.toLowerCase())) {
+                    groupIds.add(i.toString());
+                    console.log(`Added groupId ${i} from fallback scan (user is member)`);
                 }
+            } catch (error) {
+                console.log(`Group ${i} does not exist or access denied`);
             }
         }
+        console.log('Final group IDs found:', Array.from(groupIds));
         groupSelect.innerHTML = '<option value="" disabled selected>Select a group</option>';
         if (groupIds.size === 0) {
             groupSelect.innerHTML += '<option value="create">Create a new group</option>';
@@ -1156,14 +1205,17 @@ async function handleExpenseFormSubmit(e) {
                 value: '0',
                 gasPrice: web3.utils.toWei('50', 'gwei')
             });
-            expenseMessage.textContent = `Group created! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`;
+            expenseMessage.innerHTML = `<strong>Group created successfully!</strong> <a href="https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}" target="_blank">View Tx</a>`;
             console.log('Group created, tx:', tx.transactionHash);
-            groupCreationDiv.style.display = 'none';
-            submitButton.textContent = 'Add Expense';
-            e.target.reset();
-            await populateGroupDropdown();
-            const groupCount = await getContract().methods.groupCount().call();
-            document.getElementById('groupId').value = parseInt(groupCount);
+            // Delay reset to show message
+            setTimeout(() => {
+                groupCreationDiv.style.display = 'none';
+                submitButton.textContent = 'Add Expense';
+                e.target.reset();
+                populateGroupDropdown();
+                const newGroupId = parseInt(await getContract().methods.groupCount().call());
+                document.getElementById('groupId').value = newGroupId;
+            }, 3000);
         } catch (error) {
             console.error('Group creation error:', error);
             expenseMessage.textContent = 'Error: ' + (error.message.includes('revert') ? 'Invalid input or contract revert. Check addresses and try again.' : error.message);
@@ -1219,10 +1271,13 @@ async function handleExpenseFormSubmit(e) {
             value: '0',
             gasPrice: web3.utils.toWei('50', 'gwei')
         });
-        expenseMessage.textContent = `Expense added! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`;
+        expenseMessage.innerHTML = `<strong>Expense added successfully!</strong> <a href="https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}" target="_blank">View Tx</a>`;
         console.log('Expense added, tx:', tx.transactionHash);
-        e.target.reset();
-        await populateDashboard();
+        // Delay reset to show message
+        setTimeout(() => {
+            e.target.reset();
+            populateDashboard();
+        }, 3000);
     } catch (error) {
         console.error('Expense submission error:', error);
         expenseMessage.textContent = 'Error: ' + (error.message.includes('Failed to check for transaction receipt') || error.message.includes('network error') ? 'Failed to connect to Shardeum RPC. Please check your network and try again.' : error.message.includes('revert') ? 'Invalid input or contract revert. Check inputs and try again.' : error.message);
@@ -1238,10 +1293,13 @@ async function handleExpenseFormSubmit(e) {
                         value: '0',
                         gasPrice: web3.utils.toWei('50', 'gwei')
                     });
-                    expenseMessage.textContent = `Expense added! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`;
+                    expenseMessage.innerHTML = `<strong>Expense added successfully (retry)!</strong> <a href="https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}" target="_blank">View Tx</a>`;
                     console.log('Expense added with fallback RPC, tx:', tx.transactionHash);
-                    e.target.reset();
-                    await populateDashboard();
+                    // Delay reset
+                    setTimeout(() => {
+                        e.target.reset();
+                        populateDashboard();
+                    }, 3000);
                 } catch (retryError) {
                     console.error('Retry failed with fallback RPC:', retryError);
                     expenseMessage.textContent = 'Error: Failed to add expense after retrying with fallback RPC. Please try again later.';
@@ -1295,6 +1353,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (amountInput && currencySelect) {
             amountInput.addEventListener('input', updateShmAmount);
             currencySelect.addEventListener('change', updateShmAmount);
+        }
+        // Early price fetch for add-expense page
+        if (document.getElementById('shmAmount')) {
+            console.log('On add-expense page: Fetching SHM price early');
+            await fetchShmPrice();
         }
     }
     await checkMetaMaskConnection();
