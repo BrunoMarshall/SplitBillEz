@@ -1,32 +1,84 @@
-/* css/style.css */
 body {
     font-family: Arial, sans-serif;
     margin: 0;
-    padding: 20px;
+    padding: 0;
     background-color: #f4f4f4;
-}
-
-h1, h2, h3, h4 {
     color: #333;
 }
 
-form {
-    background: #fff;
-    padding: 20px;
+header {
+    background-color: #007bff;
+    color: white;
+    padding: 10px 0;
+}
+
+.header-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 20px;
+}
+
+.logo {
+    height: 50px;
+    opacity: 1 !important; /* Ensure no transparency */
+    background-color: transparent; /* No background interference */
+    object-fit: contain; /* Prevent stretching */
+}
+
+nav a {
+    color: white;
+    text-decoration: none;
+    margin: 0 15px;
+}
+
+nav a:hover {
+    text-decoration: underline;
+}
+
+.metamask-button {
+    background-color: #28a745;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    cursor: pointer;
     border-radius: 5px;
-    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+.metamask-button:hover {
+    background-color: #218838;
+}
+
+main {
+    max-width: 800px;
+    margin: 20px auto;
+    padding: 20px;
+    background: white;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+section {
     margin-bottom: 20px;
 }
 
+h2, h3 {
+    color: #007bff;
+}
+
+form {
+    display: flex;
+    flex-direction: column;
+}
+
 label {
-    display: block;
     margin: 10px 0 5px;
 }
 
-input, select, button {
-    width: 100%;
-    padding: 10px;
-    margin: 5px 0;
+input, select {
+    padding: 8px;
+    margin-bottom: 10px;
     border: 1px solid #ccc;
     border-radius: 4px;
 }
@@ -35,48 +87,94 @@ button {
     background-color: #007bff;
     color: white;
     border: none;
+    padding: 10px;
     cursor: pointer;
+    border-radius: 4px;
 }
 
 button:hover {
     background-color: #0056b3;
 }
 
-.metamask-button {
-    background-color: #ffffff;
-    color: #333;
-    border: 1px solid #ccc;
-    padding: 10px 20px;
-    cursor: pointer;
-    border-radius: 4px;
+.submit-group {
+    background-color: #28a745;
+}
+
+.submit-group:hover {
+    background-color: #218838;
+}
+
+.member-input {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.member-input input {
+    flex: 1;
+}
+
+.remove-member {
+    background-color: #dc3545;
+}
+
+.remove-member:hover {
+    background-color: #c82333;
+}
+
+footer {
+    background-color: #007bff;
+    color: white;
+    text-align: center;
+    padding: 5px 0; /* Reduced padding for smaller height */
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+}
+
+footer p {
+    font-size: 12px; /* Reduced font size for compactness */
+    margin: 5px 0;
+}
+
+.social-links {
+    margin-top: 5px; /* Reduced margin */
+}
+
+.social-icon {
+    width: 24px;
+    height: 24px;
+    margin: 0 10px;
 }
 
 .group {
-    background: #fff;
-    padding: 20px;
     margin-bottom: 20px;
+    padding: 15px;
+    border: 1px solid #ccc;
     border-radius: 5px;
-    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 }
 
 .group-header {
     display: flex;
     align-items: center;
-    margin-bottom: 10px;
+    gap: 10px;
 }
 
 .group-avatar {
     width: 64px;
     height: 64px;
-    margin-right: 10px;
     border-radius: 50%;
+    order: -1; /* Move avatar to the left */
 }
 
 .members-container {
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
-    margin-bottom: 20px;
 }
 
 .member-item {
@@ -89,73 +187,35 @@ button:hover {
     width: 32px;
     height: 32px;
     border-radius: 50%;
+    order: -1; /* Move avatar to the left */
 }
 
 .member-name {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 150px;
-}
-
-.balance-item {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    margin-bottom: 10px;
-}
-
-.balance-avatar {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
+    order: 0; /* Name follows avatar */
 }
 
 .expense-item {
     display: flex;
     align-items: center;
     gap: 5px;
-    margin-bottom: 10px;
 }
 
 .expense-avatar {
     width: 32px;
     height: 32px;
     border-radius: 50%;
+    order: -1; /* Move avatar to the left of expense */
 }
 
-.settle-debt-form {
+.balance-item {
     display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
     align-items: center;
+    gap: 5px;
 }
 
-.settle-debt-form select,
-.settle-debt-form input[type="number"] {
-    width: 200px;
-}
-
-.submit-group {
-    background-color: #28a745;
-    color: white;
-    padding: 10px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-.submit-group:hover {
-    background-color: #218838;
-}
-
-#expenseMessage, #settleMessage {
-    color: #d33;
-    margin-top: 10px;
-}
-
-footer {
-    text-align: center;
-    margin-top: 20px;
-    color: #666;
+.balance-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    order: -1; /* Move avatar to the left of balance */
 }
