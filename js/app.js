@@ -1,5 +1,5 @@
 // app.js - Shared Web3 Integration for SplitBillEz
-const CONTRACT_ADDRESS = '0x4fbe28ddd98ed3c0a2506d28980d73732f85d04f';
+const CONTRACT_ADDRESS = '0xff99db46c84bb5a241b2560807dab98c04d5c411';
 const CONTRACT_ABI = [
     {
         "inputs": [],
@@ -9,10 +9,13 @@ const CONTRACT_ABI = [
     {
         "anonymous": false,
         "inputs": [
-            {"indexed": false, "internalType": "uint256", "name": "expenseId", "type": "uint256"},
-            {"indexed": false, "internalType": "uint256", "name": "groupId", "type": "uint256"},
+            {"indexed": true, "internalType": "uint256", "name": "expenseId", "type": "uint256"},
+            {"indexed": true, "internalType": "uint256", "name": "groupId", "type": "uint256"},
             {"indexed": false, "internalType": "string", "name": "description", "type": "string"},
-            {"indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256"}
+            {"indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256"},
+            {"indexed": false, "internalType": "address", "name": "payer", "type": "address"},
+            {"indexed": false, "internalType": "string", "name": "splitType", "type": "string"},
+            {"indexed": false, "internalType": "uint256[]", "name": "customShares", "type": "uint256[]"}
         ],
         "name": "ExpenseAdded",
         "type": "event"
@@ -20,7 +23,7 @@ const CONTRACT_ABI = [
     {
         "anonymous": false,
         "inputs": [
-            {"indexed": false, "internalType": "uint256", "name": "groupId", "type": "uint256"},
+            {"indexed": true, "internalType": "uint256", "name": "groupId", "type": "uint256"},
             {"indexed": false, "internalType": "string", "name": "name", "type": "string"},
             {"indexed": false, "internalType": "address[]", "name": "members", "type": "address[]"}
         ],
@@ -30,7 +33,7 @@ const CONTRACT_ABI = [
     {
         "anonymous": false,
         "inputs": [
-            {"indexed": false, "internalType": "uint256", "name": "groupId", "type": "uint256"},
+            {"indexed": true, "internalType": "uint256", "name": "groupId", "type": "uint256"},
             {"indexed": false, "internalType": "address", "name": "debtor", "type": "address"},
             {"indexed": false, "internalType": "address", "name": "creditor", "type": "address"},
             {"indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256"}
@@ -41,7 +44,7 @@ const CONTRACT_ABI = [
     {
         "anonymous": false,
         "inputs": [
-            {"indexed": false, "internalType": "uint256", "name": "groupId", "type": "uint256"},
+            {"indexed": true, "internalType": "uint256", "name": "groupId", "type": "uint256"},
             {"indexed": false, "internalType": "address", "name": "from", "type": "address"},
             {"indexed": false, "internalType": "address", "name": "to", "type": "address"},
             {"indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256"}
@@ -50,13 +53,38 @@ const CONTRACT_ABI = [
         "type": "event"
     },
     {
-        "inputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-        "name": "expenses",
+        "inputs": [
+            {"internalType": "uint256", "name": "_groupId", "type": "uint256"},
+            {"internalType": "string", "name": "_description", "type": "string"},
+            {"internalType": "uint256", "name": "_amount", "type": "uint256"},
+            {"internalType": "string", "name": "_splitType", "type": "string"},
+            {"internalType": "uint256[]", "name": "_customShares", "type": "uint256[]"}
+        ],
+        "name": "addExpense",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "string", "name": "_name", "type": "string"},
+            {"internalType": "address[]", "name": "_members", "type": "address[]"}
+        ],
+        "name": "createGroup",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "_expenseId", "type": "uint256"}],
+        "name": "getExpense",
         "outputs": [
+            {"internalType": "uint256", "name": "groupId", "type": "uint256"},
             {"internalType": "string", "name": "description", "type": "string"},
             {"internalType": "uint256", "name": "amount", "type": "uint256"},
             {"internalType": "address", "name": "payer", "type": "address"},
-            {"internalType": "string", "name": "splitType", "type": "string"}
+            {"internalType": "string", "name": "splitType", "type": "string"},
+            {"internalType": "uint256[]", "name": "customShares", "type": "uint256[]"}
         ],
         "stateMutability": "view",
         "type": "function"
@@ -82,26 +110,10 @@ const CONTRACT_ABI = [
         "type": "function"
     },
     {
-        "inputs": [
-            {"internalType": "string", "name": "_name", "type": "string"},
-            {"internalType": "address[]", "name": "_members", "type": "address[]"}
-        ],
-        "name": "createGroup",
-        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {"internalType": "uint256", "name": "_groupId", "type": "uint256"},
-            {"internalType": "string", "name": "_description", "type": "string"},
-            {"internalType": "uint256", "name": "_amount", "type": "uint256"},
-            {"internalType": "string", "name": "_splitType", "type": "string"},
-            {"internalType": "uint256[]", "name": "_customShares", "type": "uint256[]"}
-        ],
-        "name": "addExpense",
-        "outputs": [],
-        "stateMutability": "nonpayable",
+        "inputs": [{"internalType": "uint256", "name": "_groupId", "type": "uint256"}],
+        "name": "getGroupExpenseIds",
+        "outputs": [{"internalType": "uint256[]", "name": "", "type": "uint256[]"}],
+        "stateMutability": "view",
         "type": "function"
     },
     {
@@ -117,16 +129,9 @@ const CONTRACT_ABI = [
     },
     {
         "inputs": [],
-        "name": "owner",
-        "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+        "name": "expenseCount",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
         "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "ownerWithdraw",
-        "outputs": [],
-        "stateMutability": "nonpayable",
         "type": "function"
     },
     {
@@ -138,9 +143,16 @@ const CONTRACT_ABI = [
     },
     {
         "inputs": [],
-        "name": "expenseCount",
-        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "name": "owner",
+        "outputs": [{"internalType": "address", "name": "", "type": "address"}],
         "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "ownerWithdraw",
+        "outputs": [],
+        "stateMutability": "nonpayable",
         "type": "function"
     },
     {
@@ -449,64 +461,6 @@ async function checkMetaMaskConnection() {
     }
 }
 
-async function fetchExpensesFallback(groupId, expenseCount) {
-    const expenses = [];
-    try {
-        const events = await getContract().getPastEvents('ExpenseAdded', {
-            filter: { groupId: groupId },
-            fromBlock: 0,
-            toBlock: 'latest'
-        });
-        console.log(`Fetched ${events.length} ExpenseAdded events for group ${groupId}`);
-
-        for (const event of events) {
-            try {
-                const expenseId = event.returnValues.expenseId;
-                const expense = await getContract().methods.expenses(expenseId).call();
-                if (expense && expense.description && expense.amount && parseInt(expense.amount) > 0 && String(event.returnValues.groupId) === String(groupId)) {
-                    const block = await web3.eth.getBlock(event.blockNumber || 'latest');
-                    expenses.push({
-                        id: expenseId,
-                        description: expense.description || 'No description',
-                        amount: web3.utils.fromWei(expense.amount || '0', 'ether'),
-                        payer: expense.payer || 'Unknown',
-                        splitType: expense.splitType || 'Unknown',
-                        timestamp: block ? new Date(block.timestamp * 1000).toLocaleString() : 'N/A'
-                    });
-                }
-            } catch (error) {
-                console.error(`Error processing expense ${event.returnValues.expenseId} for group ${groupId}:`, error);
-            }
-        }
-    } catch (error) {
-        console.error(`Error fetching ExpenseAdded events for group ${groupId} in fallback:`, error);
-        for (let i = 1; i <= Math.min(expenseCount, 50); i++) {
-            try {
-                const expense = await getContract().methods.expenses(i).call();
-                const event = await getContract().getPastEvents('ExpenseAdded', {
-                    filter: { expenseId: i, groupId: groupId },
-                    fromBlock: 0,
-                    toBlock: 'latest'
-                });
-                if (event.length > 0 && expense && expense.description && expense.amount && parseInt(expense.amount) > 0) {
-                    const block = await web3.eth.getBlock('latest');
-                    expenses.push({
-                        id: i,
-                        description: expense.description || 'No description',
-                        amount: web3.utils.fromWei(expense.amount || '0', 'ether'),
-                        payer: expense.payer || 'Unknown',
-                        splitType: expense.splitType || 'Unknown',
-                        timestamp: block ? new Date(block.timestamp * 1000).toLocaleString() : 'N/A'
-                    });
-                }
-            } catch (error) {
-                console.error(`Error fetching expense ${i} for group ${groupId} in fallback:`, error);
-            }
-        }
-    }
-    return expenses;
-}
-
 async function getDebtAmount(groupId, toAddress) {
     try {
         const userAddress = await getAccount();
@@ -521,15 +475,15 @@ async function getDebtAmount(groupId, toAddress) {
         }
         const userBalance = parseInt(balances[userIndex]);
         const toBalance = parseInt(balances[toIndex]);
-        if (userBalance >= 0) {
-            console.log(`User ${userAddress} has non-negative balance (${web3.utils.fromWei(userBalance.toString(), 'ether')} SHM) in group ${groupId}`);
+        if (userBalance <= 0) {
+            console.log(`User ${userAddress} has non-positive balance (${web3.utils.fromWei(userBalance.toString(), 'ether')} SHM) in group ${groupId}`);
             return '0';
         }
-        if (toBalance <= 0) {
-            console.log(`Recipient ${toAddress} has non-positive balance (${web3.utils.fromWei(toBalance.toString(), 'ether')} SHM) in group ${groupId}`);
+        if (toBalance >= 0) {
+            console.log(`Recipient ${toAddress} has non-negative balance (${web3.utils.fromWei(toBalance.toString(), 'ether')} SHM) in group ${groupId}`);
             return '0';
         }
-        const debtAmount = Math.min(Math.abs(userBalance), toBalance);
+        const debtAmount = Math.min(userBalance, Math.abs(toBalance));
         const debtInEther = web3.utils.fromWei(debtAmount.toString(), 'ether');
         console.log(`Calculated debt for group ${groupId}: ${userAddress} owes ${toAddress} ${debtInEther} SHM`);
         return debtInEther;
@@ -557,18 +511,8 @@ async function calculateContributionBreakdown(groupId, members, expenses) {
             }
 
             let shares;
-            if (expense.splitType === 'custom') {
-                const expenseId = expense.id;
-                const events = await getContract().getPastEvents('ExpenseAdded', {
-                    filter: { expenseId: expenseId, groupId: groupId },
-                    fromBlock: 0,
-                    toBlock: 'latest'
-                });
-                if (events.length > 0 && events[0].returnValues.customShares) {
-                    shares = events[0].returnValues.customShares.map(s => parseInt(s) / 100);
-                } else {
-                    shares = members.map(() => 1 / members.length);
-                }
+            if (expense.splitType === 'custom' && expense.customShares) {
+                shares = expense.customShares.map(s => parseInt(s) / 100);
             } else {
                 shares = members.map(() => 1 / members.length);
             }
@@ -611,24 +555,23 @@ async function getSettlementLines(groupId, members, balances) {
     try {
         const userAddress = await getAccount();
         const lines = [];
-        const balMembers = members;
-        for (let i = 0; i < balMembers.length; i++) {
-            const from = balMembers[i];
+        for (let i = 0; i < members.length; i++) {
+            const from = members[i];
             const balance = parseInt(balances[i] || '0');
             if (from.toLowerCase() === userAddress.toLowerCase() && balance > 0) {
-                for (let j = 0; j < balMembers.length; j++) {
+                for (let j = 0; j < members.length; j++) {
                     if (i !== j && parseInt(balances[j] || '0') < 0) {
-                        const to = balMembers[j];
+                        const to = members[j];
                         const debt = Math.min(balance, Math.abs(parseInt(balances[j] || '0')));
                         if (debt > 0) {
                             lines.push({
-                                from: to,
-                                to: from,
+                                from: from,
+                                to: to,
                                 amount: parseFloat(web3.utils.fromWei(debt.toString(), 'ether')).toFixed(2),
-                                fromName: getMemberName(to),
-                                toName: getMemberName(from),
-                                fromAddr: to,
-                                toAddr: from
+                                fromName: getMemberName(from),
+                                toName: getMemberName(to),
+                                fromAddr: from,
+                                toAddr: to
                             });
                         }
                     }
@@ -678,80 +621,42 @@ async function populateDashboard() {
         const groupCount = parseInt(await getContract().methods.groupCount().call()) || 0;
         console.log('Total group count from contract:', groupCount);
         const groupIds = new Set();
-        let totalAttempts = 0;
-        const maxTotalAttempts = 50;
         for (let i = 0; i < Math.min(groupCount, 50); i++) {
-            let attempts = 3;
-            let groupId = null;
-            while (attempts > 0 && totalAttempts < maxTotalAttempts) {
-                totalAttempts++;
-                try {
-                    groupId = await getContract().methods.userGroups(userAddress, i).call();
-                    console.log(`Raw userGroups[${i}]:`, groupId);
-                    if (groupId && parseInt(groupId) > 0 && groupId !== "0" && groupId !== "") {
-                        groupIds.add(groupId);
-                        console.log(`Added groupId ${groupId} at index ${i}`);
-                        break;
-                    } else {
-                        console.log(`Skipping userGroups[${i}]: invalid groupId ${groupId}`);
-                        break;
-                    }
-                } catch (error) {
-                    console.error(`Error fetching userGroups[${i}], attempt ${4 - attempts}:`, error.message, error);
-                    attempts--;
-                    if (error.message.includes('execution reverted') || error.message.includes('revert')) {
-                        console.log(`userGroups[${i}] reverted, likely invalid index or empty slot`);
-                        break;
-                    }
-                    if (attempts === 0) {
-                        console.log(`Stopping userGroups scan at index ${i} after failed attempts`);
-                        break;
-                    }
-                    await new Promise(resolve => setTimeout(resolve, 1000));
+            try {
+                const groupId = await getContract().methods.userGroups(userAddress, i).call();
+                if (groupId && parseInt(groupId) > 0) {
+                    groupIds.add(groupId.toString());
+                    console.log(`Added groupId ${groupId} at index ${i}`);
+                }
+            } catch (error) {
+                console.error(`Error fetching userGroups[${i}]:`, error);
+                if (error.message.includes('execution reverted')) {
+                    break;
                 }
             }
-            if (attempts === 0 || totalAttempts >= maxTotalAttempts || groupId === null) {
-                console.log(`Exiting userGroups loop at index ${i}: ${attempts === 0 ? 'failed attempts' : groupId === null ? 'revert or invalid groupId' : 'max total attempts reached'}`);
-                break;
-            }
-            await new Promise(resolve => setTimeout(resolve, 500));
         }
-        console.log('Group IDs from userGroups:', Array.from(groupIds));
         if (groupIds.size === 0) {
             console.log('No groups found in userGroups, attempting fallback group scan');
             for (let i = 1; i <= groupCount && i <= 50; i++) {
                 try {
                     const result = await getContract().methods.getGroup(i).call();
-                    console.log(`Fallback scan group ${i} result:`, result);
-                    const name = result.name || result[0] || 'Unnamed Group';
                     const members = result.members || result[1] || [];
-                    if (members && Array.isArray(members) && members.map(addr => addr.toLowerCase()).includes(userAddress.toLowerCase())) {
+                    if (members.map(addr => addr.toLowerCase()).includes(userAddress.toLowerCase())) {
                         groupIds.add(i.toString());
-                        console.log(`Added groupId ${i} from fallback scan`);
-                    } else {
-                        console.log(`Group ${i} does not include user ${userAddress}`);
                     }
                 } catch (error) {
-                    console.error(`Error fetching group ${i} in fallback scan:`, error.message, error);
-                    if (error.message.includes('execution reverted') || error.message.includes('revert')) {
-                        console.log(`Group ${i} reverted, likely does not exist`);
-                    }
+                    console.error(`Error fetching group ${i} in fallback scan:`, error);
                 }
-                await new Promise(resolve => setTimeout(resolve, 500));
             }
-            console.log('Group IDs from fallback scan:', Array.from(groupIds));
         }
         if (groupIds.size === 0) {
             dashboardContent.innerHTML = '<p>No groups found for this account. Create one in the Add Expense page or verify your MetaMask account.</p>';
             return;
         }
         dashboardContent.innerHTML = '';
-        const expenseCount = parseInt(await getContract().methods.expenseCount().call()) || 0;
-        console.log('Total expense count from contract:', expenseCount);
         for (let groupId of groupIds) {
             try {
                 const result = await getContract().methods.getGroup(groupId).call();
-                console.log(`Group ${groupId} raw result:`, result);
                 const name = result.name || result[0] || 'Unnamed Group';
                 const members = result.members || result[1] || [];
                 if (!members || !Array.isArray(members)) {
@@ -769,15 +674,9 @@ async function populateDashboard() {
                         };
                     })
                 );
-                let balMembers = [], balances = [];
-                try {
-                    const balanceData = await getContract().methods.getGroupBalances(groupId).call();
-                    balMembers = balanceData.members || balanceData[0] || [];
-                    balances = balanceData.bals || balanceData[1] || [];
-                    console.log(`Group ${groupId} balances:`, { balMembers, balances });
-                } catch (error) {
-                    console.error(`Error fetching balances for group ${groupId}:`, error);
-                }
+                const balanceData = await getContract().methods.getGroupBalances(groupId).call();
+                const balMembers = balanceData.members || balanceData[0] || [];
+                const balances = balanceData.bals || balanceData[1] || [];
                 const balanceAvatars = await Promise.all(
                     balMembers.map(async addr => ({
                         addr,
@@ -785,41 +684,27 @@ async function populateDashboard() {
                         avatar: await createBlockie(addr, 32, getMemberName(addr)[0].toUpperCase())
                     }))
                 );
-                let groupExpenses = [];
-                try {
-                    const events = await getContract().getPastEvents('ExpenseAdded', {
-                        filter: { groupId: groupId },
-                        fromBlock: 0,
-                        toBlock: 'latest'
-                    });
-                    console.log(`Fetched ${events.length} ExpenseAdded events for group ${groupId}`);
-                    groupExpenses = await Promise.all(
-                        events.map(async event => {
-                            const expenseId = event.returnValues.expenseId;
-                            try {
-                                const expense = await getContract().methods.expenses(expenseId).call();
-                                const block = await web3.eth.getBlock(event.blockNumber || 'latest');
-                                return {
-                                    id: expenseId,
-                                    description: expense.description || 'No description',
-                                    amount: web3.utils.fromWei(expense.amount || '0', 'ether'),
-                                    payer: expense.payer || 'Unknown',
-                                    splitType: expense.splitType || 'Unknown',
-                                    timestamp: block ? new Date(block.timestamp * 1000).toLocaleString() : 'N/A'
-                                };
-                            } catch (error) {
-                                console.error(`Error fetching expense ${expenseId} for group ${groupId}:`, error);
-                                return null;
-                            }
-                        })
-                    );
-                    groupExpenses = groupExpenses.filter(exp => exp !== null);
-                } catch (error) {
-                    console.error(`Error fetching ExpenseAdded events for group ${groupId}:`, error);
-                    groupExpenses = await fetchExpensesFallback(groupId, expenseCount);
-                    console.log(`Fallback expenses for group ${groupId}:`, groupExpenses);
-                }
-                console.log(`Group ${groupId} expenses:`, groupExpenses);
+                const expenseIds = await getContract().methods.getGroupExpenseIds(groupId).call();
+                const groupExpenses = await Promise.all(
+                    expenseIds.map(async expenseId => {
+                        try {
+                            const expense = await getContract().methods.getExpense(expenseId).call();
+                            const block = await web3.eth.getBlock('latest');
+                            return {
+                                id: expenseId,
+                                description: expense.description || 'No description',
+                                amount: web3.utils.fromWei(expense.amount || '0', 'ether'),
+                                payer: expense.payer || 'Unknown',
+                                splitType: expense.splitType || 'Unknown',
+                                customShares: expense.customShares || [],
+                                timestamp: block ? new Date(block.timestamp * 1000).toLocaleString() : 'N/A'
+                            };
+                        } catch (error) {
+                            console.error(`Error fetching expense ${expenseId} for group ${groupId}:`, error);
+                            return null;
+                        }
+                    })
+                ).then(results => results.filter(exp => exp !== null));
                 const contributionBreakdown = await calculateContributionBreakdown(groupId, members, groupExpenses);
                 const settlementLines = await getSettlementLines(groupId, balMembers, balances);
                 const settlementHistory = getSettlementHistory(groupId);
@@ -967,7 +852,7 @@ async function populateDashboard() {
                         await populateDashboard();
                     } catch (error) {
                         console.error(`Debt settlement error for group ${settleGroupId}:`, error);
-                        settleMessage.textContent = 'Error: ' + (error.message.includes('revert') ? 'Invalid input or contract revert. Check inputs and try again.' : error.message);
+                        settleMessage.textContent = 'Error: ' + (error.message.includes('revert') ? 'Invalid input or insufficient debt. Check inputs and try again.' : error.message);
                     }
                 });
                 const historyToggle = groupDiv.querySelector(`.history-toggle[data-group-id="${groupId}"]`);
@@ -1088,70 +973,33 @@ async function populateGroupDropdown() {
         console.log('Fetching groups for:', userAddress);
         document.getElementById('userAddress').value = userAddress;
         const groupCount = parseInt(await getContract().methods.groupCount().call()) || 0;
-        console.log('Total group count from contract:', groupCount);
         const groupIds = new Set();
-        let totalAttempts = 0;
-        const maxTotalAttempts = 50;
         for (let i = 0; i < Math.min(groupCount, 50); i++) {
-            let attempts = 3;
-            let groupId = null;
-            while (attempts > 0 && totalAttempts < maxTotalAttempts) {
-                totalAttempts++;
-                try {
-                    groupId = await getContract().methods.userGroups(userAddress, i).call();
-                    console.log(`Raw userGroups[${i}]:`, groupId);
-                    if (groupId && parseInt(groupId) > 0 && groupId !== "0" && groupId !== "") {
-                        groupIds.add(groupId);
-                        console.log(`Added groupId ${groupId} at index ${i}`);
-                        break;
-                    } else {
-                        console.log(`Skipping userGroups[${i}]: invalid groupId ${groupId}`);
-                        break;
-                    }
-                } catch (error) {
-                    console.error(`Error fetching userGroups[${i}], attempt ${4 - attempts}:`, error.message, error);
-                    attempts--;
-                    if (error.message.includes('execution reverted') || error.message.includes('revert')) {
-                        console.log(`userGroups[${i}] reverted, likely invalid index or empty slot`);
-                        break;
-                    }
-                    if (attempts === 0) {
-                        console.log(`Stopping userGroups scan at index ${i} after failed attempts`);
-                        break;
-                    }
-                    await new Promise(resolve => setTimeout(resolve, 1000));
+            try {
+                const groupId = await getContract().methods.userGroups(userAddress, i).call();
+                if (groupId && parseInt(groupId) > 0) {
+                    groupIds.add(groupId.toString());
+                }
+            } catch (error) {
+                console.error(`Error fetching userGroups[${i}]:`, error);
+                if (error.message.includes('execution reverted')) {
+                    break;
                 }
             }
-            if (attempts === 0 || totalAttempts >= maxTotalAttempts || groupId === null) {
-                console.log(`Exiting userGroups loop at index ${i}: ${attempts === 0 ? 'failed attempts' : groupId === null ? 'revert or invalid groupId' : 'max total attempts reached'}`);
-                break;
-            }
-            await new Promise(resolve => setTimeout(resolve, 500));
         }
-        console.log('Group IDs from userGroups:', Array.from(groupIds));
         if (groupIds.size === 0) {
             console.log('No groups found in userGroups, attempting fallback group scan');
             for (let i = 1; i <= groupCount && i <= 50; i++) {
                 try {
                     const result = await getContract().methods.getGroup(i).call();
-                    console.log(`Fallback scan group ${i} result:`, result);
-                    const name = result.name || result[0] || 'Unnamed Group';
                     const members = result.members || result[1] || [];
-                    if (members && Array.isArray(members) && members.map(addr => addr.toLowerCase()).includes(userAddress.toLowerCase())) {
+                    if (members.map(addr => addr.toLowerCase()).includes(userAddress.toLowerCase())) {
                         groupIds.add(i.toString());
-                        console.log(`Added groupId ${i} from fallback scan`);
-                    } else {
-                        console.log(`Group ${i} does not include user ${userAddress}`);
                     }
                 } catch (error) {
-                    console.error(`Error fetching group ${i} in fallback scan:`, error.message, error);
-                    if (error.message.includes('execution reverted') || error.message.includes('revert')) {
-                        console.log(`Group ${i} reverted, likely does not exist`);
-                    }
+                    console.error(`Error fetching group ${i} in fallback scan:`, error);
                 }
-                await new Promise(resolve => setTimeout(resolve, 500));
             }
-            console.log('Group IDs from fallback scan:', Array.from(groupIds));
         }
         groupSelect.innerHTML = '<option value="" disabled selected>Select a group</option>';
         if (groupIds.size === 0) {
@@ -1166,13 +1014,7 @@ async function populateGroupDropdown() {
             for (let groupId of groupIds) {
                 try {
                     const result = await getContract().methods.getGroup(groupId).call();
-                    console.log(`Group ${groupId} raw result:`, result);
                     const name = result.name || result[0] || 'Unnamed Group';
-                    const members = result.members || result[1] || [];
-                    if (!members || !Array.isArray(members)) {
-                        console.warn(`Group ${groupId} has invalid members array:`, members);
-                        continue;
-                    }
                     const option = document.createElement('option');
                     option.value = groupId;
                     option.textContent = `${name} (ID: ${groupId})`;
@@ -1297,8 +1139,6 @@ async function handleExpenseFormSubmit(e) {
                     if (name && name !== 'Me') newMemberNames[address] = name;
                 }
             }
-            console.log('Submitting members:', members);
-            console.log('Saving member names:', newMemberNames);
             if (members.length < 2) {
                 expenseMessage.textContent = 'Please include at least two valid Ethereum addresses (including yours).';
                 console.error('Insufficient valid members:', members);
