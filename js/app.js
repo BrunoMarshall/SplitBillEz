@@ -186,7 +186,7 @@ async function initWeb3(rpcIndex = 0, maxRetries = 3) {
         alert(message);
         console.error('MetaMask not detected:', message);
         if (isMobileDevice()) {
-            document.body.innerHTML += `<div style="text-align: center; margin-top: 20px;"><a href="metamask://dapp/www.splitbillez.com">Open in MetaMask</a></div>`;
+            document.body.innerHTML += '<div style="text-align: center; margin-top: 20px;"><a href="metamask://dapp/www.splitbillez.com">Open in MetaMask</a></div>';
         }
         return false;
     }
@@ -423,7 +423,7 @@ async function checkMetaMaskConnection() {
                 document.getElementById('expenseMessage').innerHTML = message;
             }
             if (isMobileDevice()) {
-                document.body.innerHTML += `<div style="text-align: center; margin-top: 20px;"><a href="metamask://dapp/www.splitbillez.com">Open in MetaMask</a></div>`;
+                document.body.innerHTML += '<div style="text-align: center; margin-top: 20px;"><a href="metamask://dapp/www.splitbillez.com">Open in MetaMask</a></div>';
             }
             return;
         }
@@ -734,7 +734,7 @@ async function populateDashboard() {
                             <div class="settlement-line ${line.amount > 0 ? (line.toAddr.toLowerCase() === userAddress.toLowerCase() ? 'positive' : 'negative') : 'settled'}" data-from="${line.fromAddr}" data-to="${line.toAddr}" data-amount="${line.amount}">
                                 <span class="settlement-icon">${line.amount > 0 ? (line.toAddr.toLowerCase() === userAddress.toLowerCase() ? '↑' : '↓') : ''}</span>
                                 <span>${line.fromName} (${line.fromAddr.slice(0, 7)}) → ${line.toName} (${line.toAddr.slice(0, 7)}): ${line.amount} SHM</span>
-                                ${line.amount > 0 ? `<button class="mark-paid-button">Mark as Paid</button>` : ''}
+                                ${line.amount > 0 ? '<button class="mark-paid-button">Mark as Paid</button>' : ''}
                             </div>
                         `).join('') : '<p>No settlements needed.</p>'}
                     </div>
@@ -811,7 +811,6 @@ async function populateDashboard() {
                 `);
                 const expensesHTML = expenseElements.length > 0 ? expenseElements.join('') : '<p>No expenses found.</p>';
                 groupDiv.querySelector('.expenses-placeholder').outerHTML = expensesHTML;
-                // Event listeners for settlement form (same as before)
                 const settleForm = document.getElementById(`settleDebtForm-${groupId}`);
                 const settleToSelect = document.getElementById(`settleTo-${groupId}`);
                 const settleAmountInput = document.getElementById(`settleAmount-${groupId}`);
@@ -849,7 +848,7 @@ async function populateDashboard() {
                             value: '0',
                             gasPrice: web3.utils.toWei('50', 'gwei')
                         });
-                        settleMessage.textContent = `Debt settled! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`;
+                        settleMessage.textContent = 'Debt settled! Transaction: https://explorer-unstable.shardeum.org/tx/' + tx.transactionHash;
                         addSettlementToHistory(settleGroupId, userAddress, toAddress, amountInput);
                         this.reset();
                         await populateDashboard();
@@ -899,8 +898,8 @@ async function fetchShmPrice() {
     shmPrice = shmPrice || {};
 
     for (const currency of currencies) {
-        const cacheKey = `${cacheKeyPrefix}${currency}`;
-        const cacheTimestampKey = `${cacheTimestampKeyPrefix}${currency}`;
+        const cacheKey = cacheKeyPrefix + currency;
+        const cacheTimestampKey = cacheTimestampKeyPrefix + currency;
         const cachedData = localStorage.getItem(cacheKey);
         const cachedTimestamp = localStorage.getItem(cacheTimestampKey);
 
@@ -916,9 +915,9 @@ async function fetchShmPrice() {
                 console.log(`Set SHM price for ${currency}:`, 1);
             } else {
                 console.log(`Fetching SHM price for ${currency} from CoinGecko`);
-                const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=shardeum&vs_currencies=${currency}`);
+                const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=shardeum&vs_currencies=' + currency);
                 if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    throw new Error('HTTP ' + response.status + ': ' + response.statusText);
                 }
                 const data = await response.json();
                 const price = data.shardeum?.[currency];
@@ -932,7 +931,6 @@ async function fetchShmPrice() {
             localStorage.setItem(cacheTimestampKey, now.toString());
         } catch (error) {
             console.error(`Error fetching SHM price for ${currency}:`, error);
-            // Use fallback defaults
             shmPrice[currency] = currency === 'shm' ? 1 : (currency === 'usd' ? 0.11 : currency === 'eur' ? 0.1 : 9.0);
             localStorage.setItem(cacheKey, JSON.stringify(shmPrice[currency]));
             localStorage.setItem(cacheTimestampKey, now.toString());
@@ -944,7 +942,6 @@ async function fetchShmPrice() {
     if (shmAmountElement) {
         if (Object.keys(shmPrice).length > 0) {
             shmAmountElement.textContent = 'SHM Amount: Ready (fetched prices)';
-            // Add refresh button for debugging
             let refreshBtn = document.getElementById('refreshPriceBtn');
             if (!refreshBtn) {
                 refreshBtn = document.createElement('button');
@@ -991,7 +988,7 @@ function updateShmAmount() {
         }
         shmAmount = amount / price;
     }
-    shmAmountElement.textContent = `SHM Amount: ${shmAmount.toFixed(4)} SHM`;
+    shmAmountElement.textContent = 'SHM Amount: ' + shmAmount.toFixed(4) + ' SHM';
     console.log(`Calculated SHM: ${amount} ${selectedCurrency.toUpperCase()} = ${shmAmount.toFixed(4)} SHM (price: ${shmPrice[selectedCurrency]})`);
 }
 
@@ -1066,7 +1063,7 @@ async function populateGroupDropdown() {
                     const name = result.name || result[0] || 'Unnamed Group';
                     const option = document.createElement('option');
                     option.value = groupId;
-                    option.textContent = `${name} (ID: ${groupId})`;
+                    option.textContent = name + ' (ID: ' + groupId + ')';
                     groupSelect.appendChild(option);
                 } catch (error) {
                     console.error(`Error fetching group ${groupId}:`, error);
@@ -1205,16 +1202,16 @@ async function handleExpenseFormSubmit(e) {
                 value: '0',
                 gasPrice: web3.utils.toWei('50', 'gwei')
             });
-            expenseMessage.innerHTML = `<strong>Group created successfully!</strong> <a href="https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}" target="_blank">View Tx</a>`;
+            expenseMessage.innerHTML = '<strong>Group created successfully!</strong> <a href="https://explorer-unstable.shardeum.org/tx/' + tx.transactionHash + '" target="_blank">View Tx</a>';
             console.log('Group created, tx:', tx.transactionHash);
-            // Delay reset to show message
-            setTimeout(() => {
+            setTimeout(function() {
                 groupCreationDiv.style.display = 'none';
                 submitButton.textContent = 'Add Expense';
                 e.target.reset();
                 populateGroupDropdown();
-                const newGroupId = parseInt(await getContract().methods.groupCount().call());
-                document.getElementById('groupId').value = newGroupId;
+                getContract().methods.groupCount().call().then(newGroupId => {
+                    document.getElementById('groupId').value = parseInt(newGroupId);
+                });
             }, 3000);
         } catch (error) {
             console.error('Group creation error:', error);
@@ -1253,7 +1250,7 @@ async function handleExpenseFormSubmit(e) {
             }
             const [_, members] = await getContract().methods.getGroup(groupId).call();
             if (customShares.length !== members.length) {
-                expenseMessage.textContent = `Custom shares count (${customShares.length}) must match group members (${members.length}).`;
+                expenseMessage.textContent = 'Custom shares count (' + customShares.length + ') must match group members (' + members.length + ').';
                 console.error('Custom shares count mismatch:', customShares.length, 'vs', members.length);
                 return;
             }
@@ -1271,10 +1268,9 @@ async function handleExpenseFormSubmit(e) {
             value: '0',
             gasPrice: web3.utils.toWei('50', 'gwei')
         });
-        expenseMessage.innerHTML = `<strong>Expense added successfully!</strong> <a href="https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}" target="_blank">View Tx</a>`;
+        expenseMessage.innerHTML = '<strong>Expense added successfully!</strong> <a href="https://explorer-unstable.shardeum.org/tx/' + tx.transactionHash + '" target="_blank">View Tx</a>';
         console.log('Expense added, tx:', tx.transactionHash);
-        // Delay reset to show message
-        setTimeout(() => {
+        setTimeout(function() {
             e.target.reset();
             populateDashboard();
         }, 3000);
@@ -1284,7 +1280,7 @@ async function handleExpenseFormSubmit(e) {
         if (error.message.includes('Failed to check for transaction receipt') || error.message.includes('network error')) {
             if (RPC_URLS.indexOf(web3.currentProvider.host) < RPC_URLS.length - 1) {
                 const nextRpcIndex = RPC_URLS.indexOf(web3.currentProvider.host) + 1;
-                console.log(`Retrying with fallback RPC: ${RPC_URLS[nextRpcIndex]}`);
+                console.log('Retrying with fallback RPC: ' + RPC_URLS[nextRpcIndex]);
                 web3.setProvider(new Web3.providers.HttpProvider(RPC_URLS[nextRpcIndex]));
                 contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
                 try {
@@ -1293,10 +1289,9 @@ async function handleExpenseFormSubmit(e) {
                         value: '0',
                         gasPrice: web3.utils.toWei('50', 'gwei')
                     });
-                    expenseMessage.innerHTML = `<strong>Expense added successfully (retry)!</strong> <a href="https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}" target="_blank">View Tx</a>`;
+                    expenseMessage.innerHTML = '<strong>Expense added successfully (retry)!</strong> <a href="https://explorer-unstable.shardeum.org/tx/' + tx.transactionHash + '" target="_blank">View Tx</a>';
                     console.log('Expense added with fallback RPC, tx:', tx.transactionHash);
-                    // Delay reset
-                    setTimeout(() => {
+                    setTimeout(function() {
                         e.target.reset();
                         populateDashboard();
                     }, 3000);
@@ -1354,7 +1349,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             amountInput.addEventListener('input', updateShmAmount);
             currencySelect.addEventListener('change', updateShmAmount);
         }
-        // Early price fetch for add-expense page
         if (document.getElementById('shmAmount')) {
             console.log('On add-expense page: Fetching SHM price early');
             await fetchShmPrice();
