@@ -106,53 +106,58 @@ const CONTRACT_ABI = [
     },
     {
         "inputs": [
-            {"internalType": "uint256", "name": "_groupId", "type": "uint256"},
-            {"internalType": "address", "name": "_to", "type": "address"},
-            {"internalType": "uint256", "name": "_amount", "type": "uint256"}
-        ],
-        "name": "settleDebt",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "owner",
-        "outputs": [{"internalType": "address", "name": "", "type": "address"}],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "ownerWithdraw",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "groupCount",
-        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "expenseCount",
-        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {"internalType": "address", "name": "", "type": "address"},
-            {"internalType": "uint256", "name": "", "type": "uint256"}
-        ],
-        "name": "userGroups",
-        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-        "stateMutability": "view",
-        "type": "function"
-    }
+            {"internalрованной": "uint256",
+            "name": "_groupId",
+            "type": "uint256"
+        },
+        {
+            "inputs": [
+                {"internalType": "address", "name": "_to", "type": "address"},
+                {"internalType": "uint256", "name": "_amount", "type": "uint256"}
+            ],
+            "name": "settleDebt",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+        },
+        {
+            "inputs": [],
+            "name": "owner",
+            "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+            "stateMutability": "view",
+            "type": "function"
+        },
+        {
+            "inputs": [],
+            "name": "ownerWithdraw",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+        },
+        {
+            "inputs": [],
+            "name": "groupCount",
+            "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+            "stateMutability": "view",
+            "type": "function"
+        },
+        {
+            "inputs": [],
+            "name": "expenseCount",
+            "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+            "stateMutability": "view",
+            "type": "function"
+        },
+        {
+            "inputs": [
+                {"internalType": "address", "name": "", "type": "address"},
+                {"internalType": "uint256", "name": "", "type": "uint256"}
+            ],
+            "name": "userGroups",
+            "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+            "stateMutability": "view",
+            "type": "function"
+        }
 ];
 
 let web3;
@@ -456,22 +461,60 @@ async function checkMetaMaskConnection() {
 
 async function fetchExpensesFallback(groupId, expenseCount) {
     const expenses = [];
-    for (let i = 1; i <= Math.min(expenseCount, 50); i++) {
-        try {
-            const expense = await getContract().methods.expenses(i).call();
-            if (expense && expense.description && expense.amount && parseInt(expense.amount) > 0) {
-                const block = await web3.eth.getBlock('latest');
-                expenses.push({
-                    id: i,
-                    description: expense.description || 'No description',
-                    amount: web3.utils.fromWei(expense.amount || '0', 'ether'),
-                    payer: expense.payer || 'Unknown',
-                    splitType: expense.splitType || 'Unknown',
-                    timestamp: block ? new Date(block.timestamp * 1000).toLocaleString() : 'N/A'
-                });
+    try {
+        // Fetch ExpenseAdded events filtered by groupId
+        const events = await getContract().getPastEvents('ExpenseAdded', {
+            filter: { groupId: groupId },
+            fromBlock: 0,
+            toBlock: 'latest'
+        });
+        console.log(`Fetched ${events.length} ExpenseAdded events for group ${groupId}`);
+
+        for (const event of events) {
+            try {
+                const expenseId = event.returnValues.expenseId;
+                const expense = await getContract().methods.expenses(expenseId).call();
+                if (expense && expense.description && expense.amount && parseInt(expense.amount) > 0 && String(event.returnValues.groupId) === String(groupId)) {
+                    const block = await web3.eth.getBlock(event.blockNumber || 'latest');
+                    expenses.push({
+                        id: expenseId,
+                        description: expense.description || 'No description',
+                        amount: web3.utils.fromWei(expense.amount || '0', 'ether'),
+                        payer: expense.payer || 'Unknown',
+                        splitType: expense.splitType || 'Unknown',
+                        timestamp: block ? new Date(block.timestamp * 1000).toLocaleString() : 'N/A'
+                    });
+                }
+            } catch (error) {
+                console.error(`Error processing expense ${event.returnValues.expenseId} for group ${groupId}:`, error);
             }
-        } catch (error) {
-            console.error(`Error fetching expense ${i} for group ${groupId}:`, error);
+        }
+    } catch (error) {
+        console.error(`Error fetching ExpenseAdded events for group ${groupId} in fallback:`, error);
+        // Fallback to scanning expenses manually if events fail
+        for (let i = 1; i <= Math.min(expenseCount, 50); i++) {
+            try {
+                const expense = await getContract().methods.expenses(i).call();
+                // Verify if the expense belongs to the group by checking ExpenseAdded event
+                const event = await getContract().getPastEvents('ExpenseAdded', {
+                    filter: { expenseId: i, groupId: groupId },
+                    fromBlock: 0,
+                    toBlock: 'latest'
+                });
+                if (event.length > 0 && expense && expense.description && expense.amount && parseInt(expense.amount) > 0) {
+                    const block = await web3.eth.getBlock('latest');
+                    expenses.push({
+                        id: i,
+                        description: expense.description || 'No description',
+                        amount: web3.utils.fromWei(expense.amount || '0', 'ether'),
+                        payer: expense.payer || 'Unknown',
+                        splitType: expense.splitType || 'Unknown',
+                        timestamp: block ? new Date(block.timestamp * 1000).toLocaleString() : 'N/A'
+                    });
+                }
+            } catch (error) {
+                console.error(`Error fetching expense ${i} for group ${groupId} in fallback:`, error);
+            }
         }
     }
     return expenses;
@@ -593,13 +636,6 @@ async function populateDashboard() {
             dashboardContent.innerHTML = '<p>No groups found for this account. Create one in the Add Expense page or verify your MetaMask account.</p>';
             return;
         }
-        let events = [];
-        try {
-            events = await getContract().getPastEvents('ExpenseAdded', { fromBlock: 0, toBlock: 'latest' });
-            console.log('ExpenseAdded events:', events);
-        } catch (error) {
-            console.error('Error fetching ExpenseAdded events:', error);
-        }
         dashboardContent.innerHTML = '';
         const expenseCount = parseInt(await getContract().methods.expenseCount().call()) || 0;
         console.log('Total expense count from contract:', expenseCount);
@@ -640,25 +676,37 @@ async function populateDashboard() {
                         avatar: await createBlockie(addr, 32, getMemberName(addr)[0].toUpperCase())
                     }))
                 );
-                let groupExpenses = events
-                    .filter(event => String(event.returnValues.groupId) === String(groupId))
-                    .map(event => ({
-                        id: event.returnValues.expenseId,
-                        description: event.returnValues.description || 'No description',
-                        amount: web3.utils.fromWei(event.returnValues.amount || '0', 'ether'),
-                        payer: event.returnValues.payer || 'Unknown',
-                        splitType: event.returnValues.splitType || 'Unknown',
-                        timestamp: event.blockNumber ? (async () => {
+                let groupExpenses = [];
+                try {
+                    const events = await getContract().getPastEvents('ExpenseAdded', {
+                        filter: { groupId: groupId },
+                        fromBlock: 0,
+                        toBlock: 'latest'
+                    });
+                    console.log(`Fetched ${events.length} ExpenseAdded events for group ${groupId}`);
+                    groupExpenses = await Promise.all(
+                        events.map(async event => {
+                            const expenseId = event.returnValues.expenseId;
                             try {
-                                const block = await web3.eth.getBlock(event.blockNumber);
-                                return new Date(block.timestamp * 1000).toLocaleString();
-                            } catch {
-                                return 'N/A';
+                                const expense = await getContract().methods.expenses(expenseId).call();
+                                const block = await web3.eth.getBlock(event.blockNumber || 'latest');
+                                return {
+                                    id: expenseId,
+                                    description: expense.description || 'No description',
+                                    amount: web3.utils.fromWei(expense.amount || '0', 'ether'),
+                                    payer: expense.payer || 'Unknown',
+                                    splitType: expense.splitType || 'Unknown',
+                                    timestamp: block ? new Date(block.timestamp * 1000).toLocaleString() : 'N/A'
+                                };
+                            } catch (error) {
+                                console.error(`Error fetching expense ${expenseId} for group ${groupId}:`, error);
+                                return null;
                             }
-                        })() : 'N/A'
-                    }));
-                if (groupExpenses.length === 0) {
-                    console.log(`No ExpenseAdded events for group ${groupId}, trying fallback expense fetch`);
+                        })
+                    );
+                    groupExpenses = groupExpenses.filter(exp => exp !== null);
+                } catch (error) {
+                    console.error(`Error fetching ExpenseAdded events for group ${groupId}:`, error);
                     groupExpenses = await fetchExpensesFallback(groupId, expenseCount);
                     console.log(`Fallback expenses for group ${groupId}:`, groupExpenses);
                 }
@@ -707,24 +755,21 @@ async function populateDashboard() {
                     <p id="settleMessage-${groupId}"></p>
                 `;
                 dashboardContent.appendChild(groupDiv);
-                const expensePromises = groupExpenses.map(exp => exp.timestamp);
-                Promise.all(expensePromises).then(async timestamps => {
-                    const expenseAvatars = await Promise.all(
-                        groupExpenses.map(async exp => ({
-                            ...exp,
-                            avatar: await createBlockie(exp.payer, 32, getMemberName(exp.payer)[0].toUpperCase())
-                        }))
-                    );
-                    const expenseElements = expenseAvatars.map((exp, idx) => `
-                        <div class="expense-item">
-                            <img src="${exp.avatar}" class="expense-avatar" alt="${getMemberName(exp.payer)} Avatar">
-                            <span class="member-name">Expense ${exp.id}: ${exp.description} - ${exp.amount} SHM</span>
-                            <span>(Payer: ${getMemberName(exp.payer)}, Split: ${exp.splitType}, Date: ${timestamps[idx]})</span>
-                        </div>
-                    `);
-                    const expensesHTML = expenseElements.length > 0 ? expenseElements.join('') : '<p>No expenses found.</p>';
-                    groupDiv.querySelector('.expenses-placeholder').outerHTML = expensesHTML;
-                });
+                const expenseAvatars = await Promise.all(
+                    groupExpenses.map(async exp => ({
+                        ...exp,
+                        avatar: await createBlockie(exp.payer, 32, getMemberName(exp.payer)[0].toUpperCase())
+                    }))
+                );
+                const expenseElements = expenseAvatars.map(exp => `
+                    <div class="expense-item">
+                        <img src="${exp.avatar}" class="expense-avatar" alt="${getMemberName(exp.payer)} Avatar">
+                        <span class="member-name">Expense ${exp.id}: ${exp.description} - ${exp.amount} SHM</span>
+                        <span>(Payer: ${getMemberName(exp.payer)}, Split: ${exp.splitType}, Date: ${exp.timestamp})</span>
+                    </div>
+                `);
+                const expensesHTML = expenseElements.length > 0 ? expenseElements.join('') : '<p>No expenses found.</p>';
+                groupDiv.querySelector('.expenses-placeholder').outerHTML = expensesHTML;
                 const settleForm = document.getElementById(`settleDebtForm-${groupId}`);
                 const settleToSelect = document.getElementById(`settleTo-${groupId}`);
                 const settleAmountInput = document.getElementById(`settleAmount-${groupId}`);
