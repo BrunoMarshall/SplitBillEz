@@ -539,6 +539,128 @@ async function getDebtAmount(groupId, toAddress) {
     }
 }
 
+async function calculateContributionBreakdown(groupId, members, expenses) {
+    try {
+        const breakdown = members.map(member => ({
+            address: member,
+            name: getMemberName(member),
+            totalPaid: 0,
+            fairShare: 0,
+            netBalance: 0
+        }));
+
+        for (const expense of expenses) {
+            const amount = parseFloat(expense.amount) || 0;
+            const payerIndex = breakdown.findIndex(b => b.address.toLowerCase() === expense.payer.toLowerCase());
+            if (payerIndex !== -1) {
+                breakdown[payerIndex].totalPaid += amount;
+            }
+
+            let shares;
+            if (expense.splitType === 'custom') {
+                const expenseId = expense.id;
+                const events = await getContract().getPastEvents('ExpenseAdded', {
+                    filter: { expenseId: expenseId, groupId: groupId },
+                    fromBlock: 0,
+                    toBlock: 'latest'
+                });
+                if (events.length > 0 && events[0].returnValues.customShares) {
+                    shares = events[0].returnValues.customShares.map(s => parseInt(s) / 100);
+                } else {
+                    shares = members.map(() => 1 / members.length);
+                }
+            } else {
+                shares = members.map(() => 1 / members.length);
+            }
+
+            members.forEach((member, i) => {
+                const memberIndex = breakdown.findIndex(b => b.address.toLowerCase() === member.toLowerCase());
+                if (memberIndex !== -1) {
+                    breakdown[memberIndex].fairShare += amount * shares[i];
+                }
+            });
+        }
+
+        const balanceData = await getContract().methods.getGroupBalances(groupId).call();
+        const balMembers = balanceData.members || balanceData[0] || [];
+        const balances = balanceData.bals || balanceData[1] || [];
+        breakdown.forEach(b => {
+            const balIndex = balMembers.findIndex(addr => addr.toLowerCase() === b.address.toLowerCase());
+            if (balIndex !== -1) {
+                b.netBalance = parseFloat(web3.utils.fromWei(balances[balIndex] || '0', 'ether'));
+            }
+            b.totalPaid = parseFloat(b.totalPaid.toFixed(2));
+            b.fairShare = parseFloat(b.fairShare.toFixed(2));
+            b.netBalance = parseFloat(b.netBalance.toFixed(2));
+        });
+
+        return breakdown;
+    } catch (error) {
+        console.error(`Error calculating contribution breakdown for group ${groupId}:`, error);
+        return members.map(member => ({
+            address: member,
+            name: getMemberName(member),
+            totalPaid: 0,
+            fairShare: 0,
+            netBalance: 0
+        }));
+    }
+}
+
+async function getSettlementLines(groupId, members, balances) {
+    try {
+        const userAddress = await getAccount();
+        const lines = [];
+        const balMembers = members;
+        for (let i = 0; i < balMembers.length; i++) {
+            const from = balMembers[i];
+            const balance = parseInt(balances[i] || '0');
+            if (from.toLowerCase() === userAddress.toLowerCase() && balance > 0) {
+                for (let j = 0; j < balMembers.length; j++) {
+                    if (i !== j && parseInt(balances[j] || '0') < 0) {
+                        const to = balMembers[j];
+                        const debt = Math.min(balance, Math.abs(parseInt(balances[j] || '0')));
+                        if (debt > 0) {
+                            lines.push({
+                                from: to,
+                                to: from,
+                                amount: parseFloat(web3.utils.fromWei(debt.toString(), 'ether')).toFixed(2),
+                                fromName: getMemberName(to),
+                                toName: getMemberName(from),
+                                fromAddr: to,
+                                toAddr: from
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        return lines;
+    } catch (error) {
+        console.error(`Error calculating settlement lines for group ${groupId}:`, error);
+        return [];
+    }
+}
+
+function getSettlementHistory(groupId) {
+    const history = JSON.parse(localStorage.getItem(`settlementHistory_${groupId}`) || '[]');
+    return history;
+}
+
+function addSettlementToHistory(groupId, fromAddr, toAddr, amount) {
+    const history = getSettlementHistory(groupId);
+    const timestamp = new Date().toLocaleString();
+    history.push({
+        timestamp,
+        fromAddr,
+        toAddr,
+        amount,
+        fromName: getMemberName(fromAddr),
+        toName: getMemberName(toAddr)
+    });
+    localStorage.setItem(`settlementHistory_${groupId}`, JSON.stringify(history));
+}
+
 async function populateDashboard() {
     const dashboardContent = document.getElementById('dashboardContent');
     if (!dashboardContent) {
@@ -698,6 +820,9 @@ async function populateDashboard() {
                     console.log(`Fallback expenses for group ${groupId}:`, groupExpenses);
                 }
                 console.log(`Group ${groupId} expenses:`, groupExpenses);
+                const contributionBreakdown = await calculateContributionBreakdown(groupId, members, groupExpenses);
+                const settlementLines = await getSettlementLines(groupId, balMembers, balances);
+                const settlementHistory = getSettlementHistory(groupId);
                 const groupDiv = document.createElement('div');
                 groupDiv.className = 'group';
                 groupDiv.innerHTML = `
@@ -716,14 +841,57 @@ async function populateDashboard() {
                     </div>
                     <h4>Expenses:</h4>
                     <div class="expenses-placeholder">Loading expenses...</div>
-                    <h4>Balances:</h4>
-                    ${balMembers.length > 0 ? balanceAvatars.map(({ name, avatar }, i) => `
-                        <div class="balance-item">
-                            <img src="${avatar}" class="balance-avatar" alt="${name} Avatar">
-                            <span class="member-name">${name}</span>
-                            <span>: ${parseFloat(web3.utils.fromWei(balances[i] || '0', 'ether')).toFixed(2)} SHM</span>
-                        </div>
-                    `).join('') : '<p>No balances available.</p>'}
+                    <h4>Who Owes Whom:</h4>
+                    <div class="settlement-container">
+                        ${settlementLines.length > 0 ? settlementLines.map(line => `
+                            <div class="settlement-line ${line.amount > 0 ? (line.toAddr.toLowerCase() === userAddress.toLowerCase() ? 'positive' : 'negative') : 'settled'}" data-from="${line.fromAddr}" data-to="${line.toAddr}" data-amount="${line.amount}">
+                                <span class="settlement-icon">${line.amount > 0 ? (line.toAddr.toLowerCase() === userAddress.toLowerCase() ? '↑' : '↓') : ''}</span>
+                                <span>${line.fromName} (${line.fromAddr.slice(0, 7)}) → ${line.toName} (${line.toAddr.slice(0, 7)}): ${line.amount} SHM</span>
+                                ${line.amount > 0 ? `<button class="mark-paid-button">Mark as Paid</button>` : ''}
+                            </div>
+                        `).join('') : '<p>No settlements needed.</p>'}
+                    </div>
+                    <h4>Contribution Breakdown:</h4>
+                    <table class="contribution-table">
+                        <thead>
+                            <tr>
+                                <th>Member</th>
+                                <th>Total Paid (SHM)</th>
+                                <th>Fair Share (SHM)</th>
+                                <th>Net Balance (SHM)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${contributionBreakdown.map(b => `
+                                <tr>
+                                    <td>
+                                        <img src="${balanceAvatars.find(ba => ba.addr.toLowerCase() === b.address.toLowerCase())?.avatar || createBlockie(b.address, 32, b.name[0].toUpperCase())}" class="balance-avatar" alt="${b.name} Avatar">
+                                        ${b.name} (${b.address.slice(0, 7)})
+                                    </td>
+                                    <td>${b.totalPaid.toFixed(2)}</td>
+                                    <td>${b.fairShare.toFixed(2)}</td>
+                                    <td class="${b.netBalance > 0 ? 'positive' : b.netBalance < 0 ? 'negative' : 'settled'}">
+                                        <span class="settlement-icon">${b.netBalance > 0 ? '↑' : b.netBalance < 0 ? '↓' : ''}</span>
+                                        ${b.netBalance.toFixed(2)}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td colspan="4">
+                                        <div class="progress-container">
+                                            <div class="progress-bar" style="width: ${(b.totalPaid / (b.fairShare || 1)) * 100}%"></div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                    <h4>Settlement History:</h4>
+                    <div class="history-toggle" data-group-id="${groupId}">Show Settlement History</div>
+                    <div class="history-log" id="history-log-${groupId}">
+                        ${settlementHistory.length > 0 ? settlementHistory.map(h => `
+                            <div class="history-item">${h.timestamp}: ${h.fromName} (${h.fromAddr.slice(0, 7)}) paid ${h.toName} (${h.toAddr.slice(0, 7)}) ${h.amount} SHM</div>
+                        `).join('') : '<p>No settlement history.</p>'}
+                    </div>
                     <h4>Settle Debt</h4>
                     <form id="settleDebtForm-${groupId}" class="settle-debt-form">
                         <input type="hidden" name="groupId" value="${groupId}">
@@ -751,8 +919,7 @@ async function populateDashboard() {
                 const expenseElements = expenseAvatars.map(exp => `
                     <div class="expense-item">
                         <img src="${exp.avatar}" class="expense-avatar" alt="${getMemberName(exp.payer)} Avatar">
-                        <span class="member-name">Expense ${exp.id}: ${exp.description} - ${exp.amount} SHM</span>
-                        <span>(Payer: ${getMemberName(exp.payer)}, Split: ${exp.splitType}, Date: ${exp.timestamp})</span>
+                        <span class="member-name">Expense ${exp.id}: ${exp.description} - ${exp.amount} SHM (Payer: ${getMemberName(exp.payer)} (${exp.payer.slice(0, 7)}), Split: ${exp.splitType}, Date: ${exp.timestamp})</span>
                     </div>
                 `);
                 const expensesHTML = expenseElements.length > 0 ? expenseElements.join('') : '<p>No expenses found.</p>';
@@ -795,12 +962,35 @@ async function populateDashboard() {
                             gasPrice: web3.utils.toWei('50', 'gwei')
                         });
                         settleMessage.textContent = `Debt settled! Transaction: https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}`;
+                        addSettlementToHistory(settleGroupId, userAddress, toAddress, amountInput);
                         this.reset();
                         await populateDashboard();
                     } catch (error) {
                         console.error(`Debt settlement error for group ${settleGroupId}:`, error);
                         settleMessage.textContent = 'Error: ' + (error.message.includes('revert') ? 'Invalid input or contract revert. Check inputs and try again.' : error.message);
                     }
+                });
+                const historyToggle = groupDiv.querySelector(`.history-toggle[data-group-id="${groupId}"]`);
+                const historyLog = document.getElementById(`history-log-${groupId}`);
+                historyToggle.addEventListener('click', () => {
+                    historyLog.classList.toggle('active');
+                    historyToggle.textContent = historyLog.classList.contains('active') ? 'Hide Settlement History' : 'Show Settlement History';
+                });
+                const markPaidButtons = groupDiv.querySelectorAll('.mark-paid-button');
+                markPaidButtons.forEach(button => {
+                    button.addEventListener('click', () => {
+                        const settlementLine = button.parentElement;
+                        const fromAddr = settlementLine.dataset.from;
+                        const toAddr = settlementLine.dataset.to;
+                        const amount = settlementLine.dataset.amount;
+                        addSettlementToHistory(groupId, fromAddr, toAddr, amount);
+                        settlementLine.classList.add('settled');
+                        settlementLine.querySelector('.settlement-icon').textContent = '';
+                        button.classList.add('disabled');
+                        button.disabled = true;
+                        button.textContent = 'Paid';
+                        populateDashboard();
+                    });
                 });
             } catch (error) {
                 console.error(`Error processing group ${groupId}:`, error);
@@ -1265,32 +1455,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (amountInput && currencySelect) {
             amountInput.addEventListener('input', updateShmAmount);
             currencySelect.addEventListener('change', updateShmAmount);
-            currencySelect.value = 'usd';
-            await fetchShmPrice();
-            updateShmAmount();
         }
-        updateRemoveButtons();
-        await checkMetaMaskConnection();
-    } else if (document.getElementById('dashboardContent')) {
-        await checkMetaMaskConnection();
     }
-    window.ethereum?.on('accountsChanged', async (accounts) => {
-        console.log('Accounts changed:', accounts);
-        if (accounts.length === 0) {
-            await disconnectWallet();
-        } else {
-            userAccount = accounts[0];
-            contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
-            await updateUI();
-            if (document.getElementById('groupId')) {
-                await populateGroupDropdown();
-            } else if (document.getElementById('dashboardContent')) {
-                await populateDashboard();
-            }
-        }
-    });
-    window.ethereum?.on('chainChanged', () => {
-        console.log('Chain changed, reinitializing Web3');
-        window.location.reload();
-    });
+    await checkMetaMaskConnection();
 });
