@@ -707,10 +707,10 @@ async function populateDashboard() {
                     </div>
                     <p><strong>Members:</strong></p>
                     <div class="members-container">
-                        ${memberAvatars.map(({ name, avatar }) => `
+                        ${memberAvatars.map(({ name, avatar, addr }) => `
                             <span class="member-item">
                                 <img src="${avatar}" class="member-avatar" alt="${name} Avatar">
-                                <span class="member-name">${name}</span>
+                                <span class="member-name">${name} (${addr.slice(0, 7)})</span>
                             </span>
                         `).join('')}
                     </div>
