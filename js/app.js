@@ -577,7 +577,7 @@ async function populateDashboard() {
                 } catch (error) {
                     console.error(`Error fetching userGroups[${i}], attempt ${4 - attempts}:`, error.message, error);
                     attempts--;
-                    if (error.message.includes('execution reverted')) {
+                    if (error.message.includes('execution reverted') || error.message.includes('revert')) {
                         console.log(`userGroups[${i}] reverted, likely invalid index or empty slot`);
                         break;
                     }
@@ -611,7 +611,7 @@ async function populateDashboard() {
                     }
                 } catch (error) {
                     console.error(`Error fetching group ${i} in fallback scan:`, error.message, error);
-                    if (error.message.includes('execution reverted')) {
+                    if (error.message.includes('execution reverted') || error.message.includes('revert')) {
                         console.log(`Group ${i} reverted, likely does not exist`);
                     }
                 }
@@ -921,7 +921,7 @@ async function populateGroupDropdown() {
                 } catch (error) {
                     console.error(`Error fetching userGroups[${i}], attempt ${4 - attempts}:`, error.message, error);
                     attempts--;
-                    if (error.message.includes('execution reverted')) {
+                    if (error.message.includes('execution reverted') || error.message.includes('revert')) {
                         console.log(`userGroups[${i}] reverted, likely invalid index or empty slot`);
                         break;
                     }
@@ -955,7 +955,7 @@ async function populateGroupDropdown() {
                     }
                 } catch (error) {
                     console.error(`Error fetching group ${i} in fallback scan:`, error.message, error);
-                    if (error.message.includes('execution reverted')) {
+                    if (error.message.includes('execution reverted') || error.message.includes('revert')) {
                         console.log(`Group ${i} reverted, likely does not exist`);
                     }
                 }
