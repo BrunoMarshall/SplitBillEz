@@ -106,58 +106,53 @@ const CONTRACT_ABI = [
     },
     {
         "inputs": [
-            {"internalрованной": "uint256",
-            "name": "_groupId",
-            "type": "uint256"
-        },
-        {
-            "inputs": [
-                {"internalType": "address", "name": "_to", "type": "address"},
-                {"internalType": "uint256", "name": "_amount", "type": "uint256"}
-            ],
-            "name": "settleDebt",
-            "outputs": [],
-            "stateMutability": "nonpayable",
-            "type": "function"
-        },
-        {
-            "inputs": [],
-            "name": "owner",
-            "outputs": [{"internalType": "address", "name": "", "type": "address"}],
-            "stateMutability": "view",
-            "type": "function"
-        },
-        {
-            "inputs": [],
-            "name": "ownerWithdraw",
-            "outputs": [],
-            "stateMutability": "nonpayable",
-            "type": "function"
-        },
-        {
-            "inputs": [],
-            "name": "groupCount",
-            "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-            "stateMutability": "view",
-            "type": "function"
-        },
-        {
-            "inputs": [],
-            "name": "expenseCount",
-            "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-            "stateMutability": "view",
-            "type": "function"
-        },
-        {
-            "inputs": [
-                {"internalType": "address", "name": "", "type": "address"},
-                {"internalType": "uint256", "name": "", "type": "uint256"}
-            ],
-            "name": "userGroups",
-            "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-            "stateMutability": "view",
-            "type": "function"
-        }
+            {"internalType": "uint256", "name": "_groupId", "type": "uint256"},
+            {"internalType": "address", "name": "_to", "type": "address"},
+            {"internalType": "uint256", "name": "_amount", "type": "uint256"}
+        ],
+        "name": "settleDebt",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "owner",
+        "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "ownerWithdraw",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "groupCount",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "expenseCount",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "", "type": "address"},
+            {"internalType": "uint256", "name": "", "type": "uint256"}
+        ],
+        "name": "userGroups",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    }
 ];
 
 let web3;
@@ -184,18 +179,16 @@ async function initWeb3(rpcIndex = 0, maxRetries = 3) {
         return false;
     }
     try {
-        // Use window.ethereum as the primary provider
         web3 = new Web3(window.ethereum);
         console.log('Web3 initialized with window.ethereum:', !!web3, 'Version:', Web3.version);
 
-        // Switch to Shardeum Unstable Testnet
         let chainSwitchAttempts = 0;
         const maxChainSwitchAttempts = 3;
         while (chainSwitchAttempts < maxChainSwitchAttempts) {
             try {
                 await window.ethereum.request({
                     method: 'wallet_switchEthereumChain',
-                    params: [{ chainId: '0x1f90' }] // Shardeum Unstable Testnet (8080)
+                    params: [{ chainId: '0x1f90' }]
                 });
                 break;
             } catch (switchError) {
@@ -221,7 +214,6 @@ async function initWeb3(rpcIndex = 0, maxRetries = 3) {
             }
         }
 
-        // Request accounts
         let accountAttempts = 0;
         while (accountAttempts < maxRetries) {
             try {
@@ -246,8 +238,6 @@ async function initWeb3(rpcIndex = 0, maxRetries = 3) {
         console.log('Connected account:', userAccount);
         console.log('Contract initialized:', !!contract);
         await updateUI();
-
-        // Fallback to HTTP provider if MetaMask fails
         window.ethereum.on('error', async (error) => {
             console.error('MetaMask provider error:', error);
             if (rpcIndex < RPC_URLS.length - 1) {
@@ -462,7 +452,6 @@ async function checkMetaMaskConnection() {
 async function fetchExpensesFallback(groupId, expenseCount) {
     const expenses = [];
     try {
-        // Fetch ExpenseAdded events filtered by groupId
         const events = await getContract().getPastEvents('ExpenseAdded', {
             filter: { groupId: groupId },
             fromBlock: 0,
@@ -491,11 +480,9 @@ async function fetchExpensesFallback(groupId, expenseCount) {
         }
     } catch (error) {
         console.error(`Error fetching ExpenseAdded events for group ${groupId} in fallback:`, error);
-        // Fallback to scanning expenses manually if events fail
         for (let i = 1; i <= Math.min(expenseCount, 50); i++) {
             try {
                 const expense = await getContract().methods.expenses(i).call();
-                // Verify if the expense belongs to the group by checking ExpenseAdded event
                 const event = await getContract().getPastEvents('ExpenseAdded', {
                     filter: { expenseId: i, groupId: groupId },
                     fromBlock: 0,
@@ -828,26 +815,26 @@ async function populateDashboard() {
 async function fetchShmPrice() {
     const cacheKeyPrefix = 'shmPriceCache_';
     const cacheTimestampKeyPrefix = 'shmPriceTimestamp_';
-    const cacheDuration = 10 * 60 * 1000; // 10 minutes
+    const cacheDuration = 10 * 60 * 1000;
     const now = Date.now();
     const currencies = ['usd', 'eur', 'inr', 'shm'];
     shmPrice = shmPrice || {};
-    
+
     for (const currency of currencies) {
         const cacheKey = `${cacheKeyPrefix}${currency}`;
         const cacheTimestampKey = `${cacheTimestampKeyPrefix}${currency}`;
         const cachedData = localStorage.getItem(cacheKey);
         const cachedTimestamp = localStorage.getItem(cacheTimestampKey);
-        
+
         if (cachedData && cachedTimestamp && (now - parseInt(cachedTimestamp)) < cacheDuration) {
             console.log(`Using cached SHM price for ${currency}:`, JSON.parse(cachedData));
             shmPrice[currency] = JSON.parse(cachedData);
             continue;
         }
-        
+
         try {
             if (currency === 'shm') {
-                shmPrice[currency] = 1; // 1 SHM = 1 SHM
+                shmPrice[currency] = 1;
                 console.log(`Set SHM price for ${currency}:`, 1);
             } else {
                 console.log(`Fetching SHM price for ${currency} from CoinGecko`);
@@ -866,7 +853,7 @@ async function fetchShmPrice() {
             localStorage.setItem(cacheTimestampKey, now.toString());
         }
     }
-    
+
     const shmAmountElement = document.getElementById('shmAmount');
     if (shmAmountElement && !Object.keys(shmPrice).length) {
         shmAmountElement.textContent = 'Error fetching SHM price. Using default.';
@@ -1278,7 +1265,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (amountInput && currencySelect) {
             amountInput.addEventListener('input', updateShmAmount);
             currencySelect.addEventListener('change', updateShmAmount);
-            currencySelect.value = 'usd'; // Default to USD
+            currencySelect.value = 'usd';
             await fetchShmPrice();
             updateShmAmount();
         }
