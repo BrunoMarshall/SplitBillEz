@@ -193,6 +193,7 @@ async function initWeb3(rpcIndex = 0, maxRetries = 3) {
     try {
         web3 = new Web3(window.ethereum);
         console.log('Web3 initialized with window.ethereum:', !!web3, 'Version:', Web3.version);
+        console.log('Using RPC:', RPC_URLS[rpcIndex]);
 
         let chainSwitchAttempts = 0;
         const maxChainSwitchAttempts = 3;
@@ -219,7 +220,7 @@ async function initWeb3(rpcIndex = 0, maxRetries = 3) {
                 } else if (switchError.message.includes('network error') && chainSwitchAttempts < maxChainSwitchAttempts - 1) {
                     console.warn(`Chain switch failed, retrying (${chainSwitchAttempts + 1}/${maxChainSwitchAttempts})...`);
                     chainSwitchAttempts++;
-                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    await new Promise(resolve => setTimeout(resolve, 3000)); // Increased delay
                     continue;
                 }
                 throw switchError;
@@ -239,7 +240,7 @@ async function initWeb3(rpcIndex = 0, maxRetries = 3) {
                 if (accountError.message.includes('network error') && accountAttempts < maxRetries - 1) {
                     console.warn(`Account request failed, retrying (${accountAttempts + 1}/${maxRetries})...`);
                     accountAttempts++;
-                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    await new Promise(resolve => setTimeout(resolve, 3000)); // Increased delay
                     continue;
                 }
                 throw accountError;
@@ -252,6 +253,7 @@ async function initWeb3(rpcIndex = 0, maxRetries = 3) {
         await updateUI();
         window.ethereum.on('error', async (error) => {
             console.error('MetaMask provider error:', error);
+            console.log('Current RPC:', web3.currentProvider.host);
             if (rpcIndex < RPC_URLS.length - 1) {
                 console.log(`Switching to fallback RPC: ${RPC_URLS[rpcIndex + 1]}`);
                 web3.setProvider(new Web3.providers.HttpProvider(RPC_URLS[rpcIndex + 1]));
@@ -265,7 +267,7 @@ async function initWeb3(rpcIndex = 0, maxRetries = 3) {
         console.error(`Error initializing Web3:`, error);
         if (rpcIndex < RPC_URLS.length - 1) {
             console.log(`Retrying with next RPC: ${RPC_URLS[rpcIndex + 1]}`);
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            await new Promise(resolve => setTimeout(resolve, 3000)); // Increased delay
             return await initWeb3(rpcIndex + 1, maxRetries);
         }
         const message = `Failed to connect to MetaMask or RPC endpoints: ${error.message}. Please check your MetaMask connection and try again.`;
@@ -472,20 +474,19 @@ async function getDebtAmount(groupId, toAddress) {
             console.log(`User ${userAddress} or recipient ${toAddress} not found in group ${groupId}`);
             return '0';
         }
-        const userBalance = parseInt(balances[userIndex]);
-        const toBalance = parseInt(balances[toIndex]);
+        const userBalance = parseFloat(web3.utils.fromWei(balances[userIndex] || '0', 'ether'));
+        const toBalance = parseFloat(web3.utils.fromWei(balances[toIndex] || '0', 'ether'));
         if (userBalance <= 0) {
-            console.log(`User ${userAddress} has non-positive balance (${web3.utils.fromWei(userBalance.toString(), 'ether')} SHM) in group ${groupId}`);
+            console.log(`User ${userAddress} has non-positive balance (${userBalance} SHM) in group ${groupId}`);
             return '0';
         }
         if (toBalance >= 0) {
-            console.log(`Recipient ${toAddress} has non-negative balance (${web3.utils.fromWei(toBalance.toString(), 'ether')} SHM) in group ${groupId}`);
+            console.log(`Recipient ${toAddress} has non-negative balance (${toBalance} SHM) in group ${groupId}`);
             return '0';
         }
         const debtAmount = Math.min(userBalance, Math.abs(toBalance));
-        const debtInEther = web3.utils.fromWei(debtAmount.toString(), 'ether');
-        console.log(`Calculated debt for group ${groupId}: ${userAddress} owes ${toAddress} ${debtInEther} SHM`);
-        return debtInEther;
+        console.log(`Calculated debt for group ${groupId}: ${userAddress} owes ${toAddress} ${debtAmount} SHM`);
+        return debtAmount.toFixed(2);
     } catch (error) {
         console.error(`Error calculating debt for group ${groupId}, to ${toAddress}:`, error);
         return '0';
@@ -553,30 +554,33 @@ async function calculateContributionBreakdown(groupId, members, expenses) {
 async function getSettlementLines(groupId, members, balances) {
     try {
         const userAddress = await getAccount();
+        console.log(`Calculating settlements for group ${groupId}, members:`, members, 'balances:', balances);
         const lines = [];
         for (let i = 0; i < members.length; i++) {
-            const from = members[i];
-            const balance = parseInt(balances[i] || '0');
-            if (from.toLowerCase() === userAddress.toLowerCase() && balance > 0) {
-                for (let j = 0; j < members.length; j++) {
-                    if (i !== j && parseInt(balances[j] || '0') < 0) {
-                        const to = members[j];
-                        const debt = Math.min(balance, Math.abs(parseInt(balances[j] || '0')));
-                        if (debt > 0) {
-                            lines.push({
-                                from: from,
-                                to: to,
-                                amount: parseFloat(web3.utils.fromWei(debt.toString(), 'ether')).toFixed(2),
-                                fromName: getMemberName(from),
-                                toName: getMemberName(to),
-                                fromAddr: from,
-                                toAddr: to
-                            });
-                        }
-                    }
+            const from = members[i].toLowerCase();
+            const balance = parseFloat(web3.utils.fromWei(balances[i] || '0', 'ether'));
+            if (balance <= 0) continue; // Skip members who don't owe anything
+            for (let j = 0; j < members.length; j++) {
+                if (i === j) continue; // Skip self
+                const to = members[j].toLowerCase();
+                const toBalance = parseFloat(web3.utils.fromWei(balances[j] || '0', 'ether'));
+                if (toBalance >= 0) continue; // Skip members who aren't owed
+                const debt = Math.min(balance, Math.abs(toBalance));
+                if (debt > 0.01) { // Threshold to avoid negligible debts
+                    lines.push({
+                        from: members[i],
+                        to: members[j],
+                        amount: debt.toFixed(2),
+                        fromName: getMemberName(members[i]),
+                        toName: getMemberName(members[j]),
+                        fromAddr: members[i],
+                        toAddr: members[j]
+                    });
+                    console.log(`Settlement line: ${getMemberName(members[i])} (${members[i]}) owes ${getMemberName(members[j])} (${members[j]}) ${debt.toFixed(2)} SHM`);
                 }
             }
         }
+        console.log(`Settlement lines for group ${groupId}:`, lines);
         return lines;
     } catch (error) {
         console.error(`Error calculating settlement lines for group ${groupId}:`, error);
@@ -946,13 +950,20 @@ async function fetchShmPrice() {
             if (!refreshBtn) {
                 refreshBtn = document.createElement('button');
                 refreshBtn.id = 'refreshPriceBtn';
-                refreshBtn.textContent = 'Refresh Price';
+                refreshBtn.textContent = '↻';
                 refreshBtn.type = 'button';
-                refreshBtn.style.marginLeft = '10px';
+                refreshBtn.style.marginLeft = '5px';
+                refreshBtn.style.padding = '2px 6px';
+                refreshBtn.style.fontSize = '12px';
                 refreshBtn.style.backgroundColor = '#007bff';
                 refreshBtn.style.color = 'white';
+                refreshBtn.style.border = 'none';
+                refreshBtn.style.borderRadius = '3px';
+                refreshBtn.style.cursor = 'pointer';
+                refreshBtn.style.verticalAlign = 'middle';
+                refreshBtn.title = 'Refresh SHM Price';
                 refreshBtn.onclick = fetchShmPrice;
-                shmAmountElement.parentNode.appendChild(refreshBtn);
+                shmAmountElement.insertAdjacentElement('afterend', refreshBtn);
             }
         } else {
             shmAmountElement.textContent = 'Error fetching SHM price. Using defaults. Check console.';
