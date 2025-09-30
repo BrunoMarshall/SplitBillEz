@@ -649,7 +649,6 @@ async function initializeCreateGroupForm() {
         userAddressInput.value = '';
         console.warn('No account connected for createGroupForm initialization');
     }
-    // Do not show createGroupForm here; handled by populateGroupDropdown
 }
 
 async function toggleForms(showExpenseForm, showCreateGroupForm) {
@@ -659,15 +658,19 @@ async function toggleForms(showExpenseForm, showCreateGroupForm) {
     const expenseMessage = document.getElementById('expenseMessage');
 
     if (!expenseForm || !createGroupForm || !submitExpenseButton || !expenseMessage) {
-        console.error('Required form elements not found');
+        console.error('Required form elements not found:', {
+            expenseForm: !!expenseForm,
+            createGroupForm: !!createGroupForm,
+            submitExpenseButton: !!submitExpenseButton,
+            expenseMessage: !!expenseMessage
+        });
         return;
     }
 
-    console.log('Toggling forms: showExpenseForm=', showExpenseForm, 'showCreateGroupForm=', showCreateGroupForm);
+    console.log('Toggling forms:', { showExpenseForm, showCreateGroupForm });
     expenseForm.style.display = showExpenseForm ? 'flex' : 'none';
     createGroupForm.style.display = showCreateGroupForm ? 'flex' : 'none';
     submitExpenseButton.disabled = !showExpenseForm;
-    submitExpenseButton.textContent = showExpenseForm ? 'Add Expense' : 'Add Expense (Select Group)';
     expenseMessage.textContent = showCreateGroupForm ? 'No groups found. Please create a new group below.' : '';
     expenseMessage.classList.toggle('success', showCreateGroupForm);
 }
@@ -701,6 +704,7 @@ async function populateGroupDropdown() {
         }
 
         const groupCount = parseInt(await contractInstance.methods.groupCount().call()) || 0;
+        console.log('Group count:', groupCount);
         const groups = [];
         for (let i = 1; i <= groupCount; i++) {
             try {
@@ -714,6 +718,7 @@ async function populateGroupDropdown() {
                 console.error(`Error fetching group ${i}:`, error);
             }
         }
+        console.log('User groups:', groups);
 
         groupSelect.innerHTML = '';
         if (groups.length === 0) {
@@ -721,6 +726,7 @@ async function populateGroupDropdown() {
             toggleForms(false, true);
             expenseMessage.textContent = 'No groups found. Please create a new group below.';
             expenseMessage.classList.add('success');
+            console.log('No groups found, showing createGroupForm');
         } else {
             groups.forEach(group => {
                 const option = document.createElement('option');
@@ -735,6 +741,7 @@ async function populateGroupDropdown() {
             toggleForms(true, false);
             expenseMessage.textContent = '';
             expenseMessage.classList.remove('success');
+            console.log('Groups found, showing expenseForm');
         }
     } catch (error) {
         console.error('Error populating group dropdown:', error);

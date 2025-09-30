@@ -82,13 +82,12 @@ form#expenseForm {
 
 form#createGroupForm {
     background-color: #e9ecef;
-    display: flex; /* Ensure form is visible when toggled */
 }
 
 label {
     margin: 10px 0 5px;
     font-weight: bold;
-    color: #333; /* Ensure labels are visible */
+    color: #333;
 }
 
 input, select {
@@ -98,8 +97,9 @@ input, select {
     border-radius: 4px;
     width: 100%;
     box-sizing: border-box;
-    color: #333; /* Ensure input text is visible */
-    background-color: white; /* Prevent black background */
+    color: #333;
+    background-color: white;
+    visibility: visible; /* Ensure inputs are visible */
 }
 
 button {
@@ -145,6 +145,7 @@ button:hover {
 
 .member-input input {
     flex: 1;
+    visibility: visible; /* Ensure member inputs are visible */
 }
 
 .member-name {
@@ -158,7 +159,7 @@ button:hover {
 .member-label {
     flex: 0 0 20%;
     font-size: 0.9em;
-    color: #333; /* Ensure label is visible */
+    color: #333;
 }
 
 .remove-member {
@@ -396,13 +397,6 @@ footer p {
     border: none;
     color: #007bff;
     cursor: pointer;
-    font-size: 14px;
-    padding: 0 5px;
-    vertical-align: middle;
-}
-
-.edit-name-button:hover {
-    color: #0056b3;
 }
 
 .edit-group-name-button {
@@ -410,13 +404,6 @@ footer p {
     border: none;
     color: #007bff;
     cursor: pointer;
-    font-size: 14px;
-    padding: 0 5px;
-    vertical-align: middle;
-}
-
-.edit-group-name-button:hover {
-    color: #0056b3;
 }
 
 .toggle-settled-button {
@@ -431,4 +418,9 @@ footer p {
 
 .toggle-settled-button:hover {
     background-color: #5a6268;
+}
+
+.settled-group {
+    background-color: #f0f0f0;
+    opacity: 0.8;
 }

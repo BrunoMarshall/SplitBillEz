@@ -25,7 +25,7 @@
     <main>
         <section>
             <h2>Add a New Expense</h2>
-            <form id="expenseForm">
+            <form id="expenseForm" style="display: none;">
                 <label for="groupId">Group:</label>
                 <select id="groupId" required>
                     <option value="" disabled selected>Loading groups...</option>
@@ -47,13 +47,13 @@
                     <option value="equal">Equal</option>
                     <option value="custom">Custom (% shares, sum to 100)</option>
                 </select>
-                <label for="customShares" id="customLabel" style="display:none;">Custom Shares (%, comma-separated):</label>
-                <input type="text" id="customShares" placeholder="e.g., 40,30,30" style="display:none;">
+                <label for="customShares" id="customLabel" style="display: none;">Custom Shares (%, comma-separated):</label>
+                <input type="text" id="customShares" placeholder="e.g., 40,30,30" style="display: none;">
                 <button type="submit" id="submitExpenseButton" class="submit-button">Add Expense</button>
                 <p id="expenseMessage"></p>
             </form>
             <h2>Create a New Group</h2>
-            <form id="createGroupForm" style="display:none;">
+            <form id="createGroupForm" style="display: none;">
                 <label for="groupName">Group Name:</label>
                 <input type="text" id="groupName" placeholder="e.g., Trip to Goa" required>
                 <label>Member Addresses:</label>
