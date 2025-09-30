@@ -446,7 +446,7 @@ async function checkMetaMaskConnection() {
         }
         const account = await getAccount();
         console.log('MetaMask connected on load:', account);
-        if (account) {
+1965        if (account) {
             if (document.getElementById('userAddress')) {
                 document.getElementById('userAddress').value = account;
                 await populateGroupDropdown();
@@ -486,15 +486,15 @@ async function getDebtAmount(groupId, toAddress) {
         }
         const userBalance = parseFloat(web3.utils.fromWei(balances[userIndex] || '0', 'ether'));
         const toBalance = parseFloat(web3.utils.fromWei(balances[toIndex] || '0', 'ether'));
-        if (userBalance <= 0) {
-            console.log(`User ${userAddress} has non-positive balance (${userBalance} SHM) in group ${groupId}`);
+        if (userBalance >= 0) {
+            console.log(`User ${userAddress} has non-negative balance (${userBalance} SHM) in group ${groupId}`);
             return '0';
         }
-        if (toBalance >= 0) {
-            console.log(`Recipient ${toAddress} has non-negative balance (${toBalance} SHM) in group ${groupId}`);
+        if (toBalance <= 0) {
+            console.log(`Recipient ${toAddress} has non-positive balance (${toBalance} SHM) in group ${groupId}`);
             return '0';
         }
-        const debtAmount = Math.min(userBalance, Math.abs(toBalance));
+        const debtAmount = Math.min(Math.abs(userBalance), toBalance);
         console.log(`Calculated debt for group ${groupId}: ${userAddress} owes ${toAddress} ${debtAmount} SHM`);
         return debtAmount.toFixed(2);
     } catch (error) {
@@ -569,13 +569,13 @@ async function getSettlementLines(groupId, members, balances) {
         for (let i = 0; i < members.length; i++) {
             const from = members[i].toLowerCase();
             const balance = parseFloat(web3.utils.fromWei(balances[i] || '0', 'ether'));
-            if (balance <= 0) continue; // Skip members who don't owe anything
+            if (balance >= 0) continue; // Skip members who are owed or have zero balance
             for (let j = 0; j < members.length; j++) {
                 if (i === j) continue; // Skip self
                 const to = members[j].toLowerCase();
                 const toBalance = parseFloat(web3.utils.fromWei(balances[j] || '0', 'ether'));
-                if (toBalance >= 0) continue; // Skip members who aren't owed
-                const debt = Math.min(balance, Math.abs(toBalance));
+                if (toBalance <= 0) continue; // Skip members who aren't owed
+                const debt = Math.min(Math.abs(balance), toBalance);
                 if (debt > 0.01) { // Threshold to avoid negligible debts
                     lines.push({
                         from: members[i],
@@ -729,7 +729,6 @@ async function populateDashboard() {
                             <div class="settlement-line ${line.fromAddr.toLowerCase() === userAddress.toLowerCase() ? 'negative' : 'positive'}" data-from="${line.fromAddr}" data-to="${line.toAddr}" data-amount="${line.amount}">
                                 <span class="settlement-icon">${line.fromAddr.toLowerCase() === userAddress.toLowerCase() ? '↓' : '↑'}</span>
                                 <span>${line.fromName} (${line.fromAddr.slice(0, 7)}) → ${line.toName} (${line.toAddr.slice(0, 7)}): ${line.amount} SHM</span>
-                                ${line.fromAddr.toLowerCase() === userAddress.toLowerCase() ? `<button class="settle-now-button" data-group-id="${groupId}" data-to="${line.toAddr}" data-amount="${line.amount}">Settle Now</button>` : ''}
                             </div>
                         `).join('') : '<p>No settlements needed.</p>'}
                     </div>
@@ -849,38 +848,6 @@ async function populateDashboard() {
                     button.addEventListener('click', () => {
                         const address = button.dataset.address;
                         updateMemberName(address);
-                    });
-                });
-                const settleNowButtons = groupDiv.querySelectorAll('.settle-now-button');
-                settleNowButtons.forEach(button => {
-                    button.addEventListener('click', async () => {
-                        if (!web3 || !getContract() || !getAccount()) {
-                            alert('Please connect MetaMask first.');
-                            return;
-                        }
-                        const settleGroupId = button.dataset.groupId;
-                        const toAddress = button.dataset.to;
-                        const amountInput = button.dataset.amount;
-                        const settleMessage = document.getElementById(`settleMessage-${settleGroupId}`);
-                        let amount;
-                        try {
-                            amount = web3.utils.toWei(amountInput, 'ether');
-                        } catch (error) {
-                            settleMessage.textContent = 'Invalid amount format.';
-                            return;
-                        }
-                        try {
-                            const tx = await getContract().methods.settleDebt(settleGroupId, toAddress, amount).send({
-                                from: await getAccount(),
-                                value: '0',
-                                gasPrice: web3.utils.toWei('50', 'gwei')
-                            });
-                            settleMessage.textContent = 'Debt settled! Transaction: https://explorer-unstable.shardeum.org/tx/' + tx.transactionHash;
-                            await populateDashboard();
-                        } catch (error) {
-                            console.error(`Debt settlement error for group ${settleGroupId}:`, error);
-                            settleMessage.textContent = 'Error: ' + (error.message.includes('revert') ? 'Invalid input or insufficient debt.' : error.message);
-                        }
                     });
                 });
             } catch (error) {
