@@ -80,12 +80,30 @@ form#expenseForm {
     background-color: #f9f9f9;
 }
 
+form#expenseForm.disabled-form {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+form#expenseForm.disabled-form select,
+form#expenseForm.disabled-form input,
+form#expenseForm.disabled-form button {
+    background-color: #e9ecef;
+    cursor: not-allowed;
+}
+
 form#createGroupForm {
     background-color: #e9ecef;
+    display: none; /* Hidden by default, toggled via JavaScript */
+}
+
+form#createGroupForm.active {
+    display: flex; /* Ensure form is visible when active */
 }
 
 label {
     margin: 10px 0 5px;
+    font-weight: bold;
 }
 
 input, select {
@@ -93,6 +111,8 @@ input, select {
     margin-bottom: 10px;
     border: 1px solid #ccc;
     border-radius: 4px;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 button {
@@ -116,6 +136,11 @@ button:hover {
     background-color: #0056b3;
 }
 
+.submit-button:disabled {
+    background-color: #6c757d;
+    cursor: not-allowed;
+}
+
 .submit-group {
     background-color: #28a745;
 }
@@ -135,12 +160,37 @@ button:hover {
     flex: 1;
 }
 
+.member-name {
+    flex: 0 0 30%;
+}
+
+.member-address {
+    flex: 0 0 50%;
+}
+
+.member-label {
+    flex: 0 0 20%;
+    font-size: 0.9em;
+    color: #555;
+}
+
 .remove-member {
     background-color: #dc3545;
 }
 
 .remove-member:hover {
     background-color: #c82333;
+}
+
+#expenseMessage, #groupMessage {
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 4px;
+}
+
+#expenseMessage.success, #groupMessage.success {
+    background-color: #d4edda;
+    color: #155724;
 }
 
 footer {
@@ -321,7 +371,7 @@ footer p {
     background-color: #138496;
 }
 
-.mark-paid-button.disabled {
+.mark-paid-button:disabled {
     background-color: #6c757d;
     cursor: not-allowed;
 }
@@ -386,7 +436,7 @@ footer p {
     background-color: #6c757d;
     color: white;
     border: none;
-    padding: 8px 16px;
+    padding: 10px;
     cursor: pointer;
     border-radius: 4px;
     margin-bottom: 10px;
@@ -394,19 +444,4 @@ footer p {
 
 .toggle-settled-button:hover {
     background-color: #5a6268;
-}
-
-.settled-group {
-    opacity: 0.6;
-    background-color: #f8f9fa;
-}
-
-.disabled-form {
-    opacity: 0.5;
-    pointer-events: none;
-}
-
-#expenseMessage.success, #groupMessage.success {
-    color: #28a745;
-    font-weight: bold;
 }

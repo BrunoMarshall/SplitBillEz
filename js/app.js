@@ -331,6 +331,9 @@ async function disconnectWallet() {
         if (document.getElementById('expenseForm')) {
             toggleExpenseForm(false);
         }
+        if (document.getElementById('createGroupForm')) {
+            document.getElementById('createGroupForm').style.display = 'none';
+        }
     } catch (error) {
         console.error('Error disconnecting wallet:', error);
         alert('Failed to disconnect wallet: ' + error.message);
@@ -344,6 +347,7 @@ async function handleMetaMaskToggle() {
         const initialized = await initWeb3();
         if (initialized && document.getElementById('groupId')) {
             await populateGroupDropdown();
+            await initializeCreateGroupForm();
         } else if (initialized && document.getElementById('dashboardContent')) {
             await populateDashboard();
         }
@@ -566,13 +570,12 @@ async function checkMetaMaskConnection() {
         }
         const account = await getAccount();
         console.log('MetaMask connected on load:', account);
-        if (account) {
-            if (document.getElementById('userAddress')) {
-                document.getElementById('userAddress').value = account;
-                await populateGroupDropdown();
-            } else if (document.getElementById('dashboardContent')) {
-                await populateDashboard();
-            }
+        if (account && document.getElementById('userAddress')) {
+            document.getElementById('userAddress').value = account;
+            await populateGroupDropdown();
+            await initializeCreateGroupForm();
+        } else if (account && document.getElementById('dashboardContent')) {
+            await populateDashboard();
         } else {
             console.log('No account connected, waiting for user to connect MetaMask');
             if (document.getElementById('dashboardContent')) {
@@ -627,15 +630,37 @@ async function getContract() {
     return contract;
 }
 
+async function initializeCreateGroupForm() {
+    const userAddressInput = document.getElementById('userAddress');
+    const createGroupForm = document.getElementById('createGroupForm');
+    if (!userAddressInput || !createGroupForm) {
+        console.error('Create group form or user address input not found');
+        return;
+    }
+    const account = await getAccount();
+    if (account) {
+        userAddressInput.value = account;
+        console.log('Initialized createGroupForm with user address:', account);
+    } else {
+        userAddressInput.value = '';
+        console.warn('No account connected for createGroupForm initialization');
+    }
+    createGroupForm.style.display = 'none'; // Ensure form is hidden by default
+}
+
 async function toggleExpenseForm(enable) {
     const expenseForm = document.getElementById('expenseForm');
-    if (!expenseForm) return;
+    const submitButton = document.getElementById('submitExpenseButton');
+    if (!expenseForm || !submitButton) return;
+    console.log('Toggling expense form, enable:', enable);
     if (enable) {
         expenseForm.classList.remove('disabled-form');
-        document.getElementById('submitExpenseButton').textContent = 'Add Expense';
+        submitButton.textContent = 'Add Expense';
+        submitButton.disabled = false;
     } else {
         expenseForm.classList.add('disabled-form');
-        document.getElementById('submitExpenseButton').textContent = 'Add Expense (Select Group)';
+        submitButton.textContent = 'Add Expense (Select Group)';
+        submitButton.disabled = true;
     }
 }
 
@@ -712,16 +737,25 @@ async function populateGroupDropdown() {
 async function toggleGroupCreation() {
     const groupId = document.getElementById('groupId')?.value;
     const createGroupForm = document.getElementById('createGroupForm');
-    if (!createGroupForm) return;
+    const expenseMessage = document.getElementById('expenseMessage');
+    if (!createGroupForm || !expenseMessage) {
+        console.error('createGroupForm or expenseMessage not found');
+        return;
+    }
 
+    console.log('toggleGroupCreation called, groupId:', groupId);
     if (groupId === 'create') {
         createGroupForm.style.display = 'block';
         toggleExpenseForm(false);
-        console.log('Showing group creation form');
+        expenseMessage.textContent = 'Please fill out the group creation form below.';
+        expenseMessage.classList.add('success');
+        console.log('Showing createGroupForm');
     } else {
         createGroupForm.style.display = 'none';
-        toggleExpenseForm(groupId !== '');
-        console.log('Hiding group creation form, expense form enabled:', groupId !== '');
+        toggleExpenseForm(groupId !== '' && groupId !== 'create');
+        expenseMessage.textContent = groupId ? '' : 'Please select a group to add an expense.';
+        expenseMessage.classList.remove('success');
+        console.log('Hiding createGroupForm, expense form enabled:', groupId !== '' && groupId !== 'create');
     }
 }
 
@@ -731,6 +765,7 @@ async function handleCreateGroupFormSubmit(e) {
     const groupMessage = document.getElementById('groupMessage');
     if (!groupMessage) return;
 
+    console.log('handleCreateGroupFormSubmit called');
     try {
         const contractInstance = await getContract();
         if (!contractInstance) {
@@ -782,6 +817,7 @@ async function handleCreateGroupFormSubmit(e) {
 
         setTimeout(() => {
             form.reset();
+            document.getElementById('userAddress').value = account;
             populateGroupDropdown();
             document.getElementById('groupId').value = newGroupId;
             toggleGroupCreation();
@@ -800,6 +836,7 @@ async function handleExpenseFormSubmit(e) {
     const expenseMessage = document.getElementById('expenseMessage');
     if (!expenseMessage || !groupId) return;
 
+    console.log('handleExpenseFormSubmit called, groupId:', groupId);
     if (groupId === 'create') {
         expenseMessage.textContent = 'Please select an existing group or create a new group first.';
         expenseMessage.classList.add('success');
@@ -937,6 +974,7 @@ function setupEventListeners() {
     const currencySelect = document.getElementById('currency');
     const metamaskButtons = document.querySelectorAll('.metamask-button');
 
+    console.log('Setting up event listeners...');
     if (metamaskButtons) {
         metamaskButtons.forEach(btn => btn.addEventListener('click', handleMetaMaskToggle));
     }
