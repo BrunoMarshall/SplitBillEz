@@ -248,7 +248,7 @@ async function initWeb3(rpcIndex = 0, maxRetries = 3) {
 
         contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
         console.log('Connected account:', userAccount);
-        console.log('Contract initialized:', !!contract);
+        console allog('Contract initialized:', !!contract);
         await updateUI();
         window.ethereum.on('error', async (error) => {
             console.error('MetaMask provider error:', error, 'Current RPC:', web3.currentProvider.host);
@@ -513,6 +513,7 @@ async function calculateContributionBreakdown(groupId, members, expenses) {
             netBalance: 0
         }));
 
+        // Calculate total paid and fair share
         for (const expense of expenses) {
             const amount = parseFloat(expense.amount) || 0;
             const payerIndex = breakdown.findIndex(b => b.address.toLowerCase() === expense.payer.toLowerCase());
@@ -535,19 +536,24 @@ async function calculateContributionBreakdown(groupId, members, expenses) {
             });
         }
 
+        // Fetch balances from contract
         const balanceData = await getContract().methods.getGroupBalances(groupId).call();
         const balMembers = balanceData.members || balanceData[0] || [];
         const balances = balanceData.bals || balanceData[1] || [];
+
+        // Assign net balances directly from contract
         breakdown.forEach(b => {
             const balIndex = balMembers.findIndex(addr => addr.toLowerCase() === b.address.toLowerCase());
             if (balIndex !== -1) {
-                b.netBalance = parseFloat(web3.utils.fromWei(balances[balIndex] || '0', 'ether'));
+                // Use contract balance directly, ensuring correct sign
+                b.netBalance = parseFloat(web3.utils.fromWei(balances[balIndex].toString(), 'ether'));
             }
             b.totalPaid = parseFloat(b.totalPaid.toFixed(2));
             b.fairShare = parseFloat(b.fairShare.toFixed(2));
             b.netBalance = parseFloat(b.netBalance.toFixed(2));
         });
 
+        console.log(`Contribution breakdown for group ${groupId}:`, breakdown);
         return breakdown;
     } catch (error) {
         console.error(`Error calculating contribution breakdown for group ${groupId}:`, error);
@@ -568,12 +574,12 @@ async function getSettlementLines(groupId, members, balances) {
         const lines = [];
         for (let i = 0; i < members.length; i++) {
             const from = members[i].toLowerCase();
-            const balance = parseFloat(web3.utils.fromWei(balances[i] || '0', 'ether'));
+            const balance = parseFloat(web3.utils.fromWei(balances[i].toString(), 'ether'));
             if (balance >= 0) continue; // Skip members who are owed or have zero balance
             for (let j = 0; j < members.length; j++) {
                 if (i === j) continue; // Skip self
                 const to = members[j].toLowerCase();
-                const toBalance = parseFloat(web3.utils.fromWei(balances[j] || '0', 'ether'));
+                const toBalance = parseFloat(web3.utils.fromWei(balances[j].toString(), 'ether'));
                 if (toBalance <= 0) continue; // Skip members who aren't owed
                 const debt = Math.min(Math.abs(balance), toBalance);
                 if (debt > 0.01) { // Threshold to avoid negligible debts
