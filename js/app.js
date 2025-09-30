@@ -619,7 +619,6 @@ async function getContract() {
         try {
             contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
             console.log('Contract initialized in getContract:', !!contract);
-            // Verify contract
             await contract.methods.groupCount().call();
         } catch (error) {
             console.error('Error initializing contract in getContract:', error);
@@ -734,7 +733,7 @@ async function handleExpenseFormSubmit(e) {
     e.preventDefault();
     const groupId = document.getElementById('groupId')?.value;
     const expenseMessage = document.getElementById('expenseMessage');
-    if (!groupId || !expenseMessage) return;
+    if (!expenseMessage) return;
 
     try {
         const contractInstance = await getContract();
@@ -786,6 +785,11 @@ async function handleExpenseFormSubmit(e) {
                 toggleGroupCreation();
             }, 3000);
         } else {
+            if (!groupId) {
+                expenseMessage.textContent = 'Please select a valid group to add an expense.';
+                expenseMessage.classList.add('success');
+                return;
+            }
             const isSettled = await isGroupSettled(groupId);
             if (isSettled) {
                 expenseMessage.textContent = 'This group is settled and cannot accept new expenses.';
@@ -793,7 +797,17 @@ async function handleExpenseFormSubmit(e) {
                 return;
             }
             const description = document.getElementById('description')?.value?.trim();
+            if (!description) {
+                expenseMessage.textContent = 'Please enter a description for the expense.';
+                expenseMessage.classList.add('success');
+                return;
+            }
             const amountInput = document.getElementById('amount')?.value;
+            if (!amountInput || isNaN(parseFloat(amountInput))) {
+                expenseMessage.textContent = 'Please enter a valid amount.';
+                expenseMessage.classList.add('success');
+                return;
+            }
             const currency = document.getElementById('currency')?.value.toLowerCase();
             const splitType = document.getElementById('split')?.value;
             let customShares = [];
@@ -802,7 +816,13 @@ async function handleExpenseFormSubmit(e) {
                 'ether'
             );
             if (splitType === 'custom') {
-                customShares = document.getElementById('customShares')?.value.split(',').map(s => parseInt(s.trim()));
+                const customSharesInput = document.getElementById('customShares')?.value;
+                if (!customSharesInput) {
+                    expenseMessage.textContent = 'Please enter custom shares for the expense.';
+                    expenseMessage.classList.add('success');
+                    return;
+                }
+                customShares = customSharesInput.split(',').map(s => parseInt(s.trim()));
                 const sum = customShares.reduce((a, b) => a + b, 0);
                 if (sum !== 100) {
                     expenseMessage.textContent = 'Custom shares must sum to 100%.';
