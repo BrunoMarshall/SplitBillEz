@@ -718,22 +718,33 @@ async function toggleGroupCreation() {
     const groupCreation = document.getElementById('groupCreation');
     const expenseFields = document.getElementById('expenseFields');
     const submitButton = document.getElementById('submitButton');
-    if (!groupCreation || !expenseFields || !submitButton) return;
+    const groupSelect = document.getElementById('groupId');
+    if (!groupCreation || !expenseFields || !submitButton || !groupSelect) return;
 
     if (groupId === 'create') {
         groupCreation.style.display = 'block';
         toggleExpenseForm(false);
+        groupSelect.removeAttribute('required'); // Remove required for group creation
     } else {
         groupCreation.style.display = 'none';
         toggleExpenseForm(true);
+        groupSelect.setAttribute('required', ''); // Restore required for expense addition
     }
 }
 
 async function handleExpenseFormSubmit(e) {
     e.preventDefault();
+    const form = e.target;
     const groupId = document.getElementById('groupId')?.value;
     const expenseMessage = document.getElementById('expenseMessage');
     if (!expenseMessage) return;
+
+    // Bypass browser validation for group creation
+    if (groupId === 'create') {
+        form.noValidate = true;
+    } else {
+        form.noValidate = false;
+    }
 
     try {
         const contractInstance = await getContract();
@@ -779,7 +790,7 @@ async function handleExpenseFormSubmit(e) {
             expenseMessage.innerHTML = `<strong>Group created successfully!</strong> Select group ID ${newGroupId} to add expenses. <a href="https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}" target="_blank">View Tx</a>`;
             expenseMessage.classList.add('success');
             setTimeout(() => {
-                e.target.reset();
+                form.reset();
                 populateGroupDropdown();
                 document.getElementById('groupId').value = newGroupId;
                 toggleGroupCreation();
@@ -844,7 +855,7 @@ async function handleExpenseFormSubmit(e) {
             expenseMessage.innerHTML = `<strong>Expense added successfully!</strong> <a href="https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}" target="_blank">View Tx</a>`;
             expenseMessage.classList.add('success');
             setTimeout(() => {
-                e.target.reset();
+                form.reset();
                 document.getElementById('groupCreation').style.display = 'none';
                 toggleExpenseForm(true);
             }, 3000);
@@ -1052,6 +1063,7 @@ async function populateDashboard() {
                 <div class="balances-container"></div>
                 <h3>Settlement</h3>
                 <div class="settlement-container"></div>
+                <h3>Settlement History</h3>
                 <div class="history-toggle">Toggle Settlement History</div>
                 <div class="history-log"></div>
                 <h3>Contribution Breakdown</h3>
