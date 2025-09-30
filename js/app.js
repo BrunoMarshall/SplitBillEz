@@ -178,7 +178,7 @@ function isMobileDevice() {
 }
 
 async function initWeb3(rpcIndex = 0, maxRetries = 3) {
-    console.log('Initializing Web3 for', isMobileDevice() ? 'mobile' : 'desktop');
+    console.log('Initializing Web3 for', isMobileDevice() ? 'mobile' : 'desktop', 'with RPC:', RPC_URLS[rpcIndex]);
     if (!window.ethereum) {
         const message = isMobileDevice()
             ? 'Please open this page in the MetaMask in-app browser or ensure MetaMask is installed and accessible. <a href="metamask://dapp/www.splitbillez.com">Open in MetaMask</a>'
@@ -193,7 +193,6 @@ async function initWeb3(rpcIndex = 0, maxRetries = 3) {
     try {
         web3 = new Web3(window.ethereum);
         console.log('Web3 initialized with window.ethereum:', !!web3, 'Version:', Web3.version);
-        console.log('Using RPC:', RPC_URLS[rpcIndex]);
 
         let chainSwitchAttempts = 0;
         const maxChainSwitchAttempts = 3;
@@ -220,7 +219,7 @@ async function initWeb3(rpcIndex = 0, maxRetries = 3) {
                 } else if (switchError.message.includes('network error') && chainSwitchAttempts < maxChainSwitchAttempts - 1) {
                     console.warn(`Chain switch failed, retrying (${chainSwitchAttempts + 1}/${maxChainSwitchAttempts})...`);
                     chainSwitchAttempts++;
-                    await new Promise(resolve => setTimeout(resolve, 3000)); // Increased delay
+                    await new Promise(resolve => setTimeout(resolve, 3000));
                     continue;
                 }
                 throw switchError;
@@ -240,7 +239,7 @@ async function initWeb3(rpcIndex = 0, maxRetries = 3) {
                 if (accountError.message.includes('network error') && accountAttempts < maxRetries - 1) {
                     console.warn(`Account request failed, retrying (${accountAttempts + 1}/${maxRetries})...`);
                     accountAttempts++;
-                    await new Promise(resolve => setTimeout(resolve, 3000)); // Increased delay
+                    await new Promise(resolve => setTimeout(resolve, 3000));
                     continue;
                 }
                 throw accountError;
@@ -252,8 +251,7 @@ async function initWeb3(rpcIndex = 0, maxRetries = 3) {
         console.log('Contract initialized:', !!contract);
         await updateUI();
         window.ethereum.on('error', async (error) => {
-            console.error('MetaMask provider error:', error);
-            console.log('Current RPC:', web3.currentProvider.host);
+            console.error('MetaMask provider error:', error, 'Current RPC:', web3.currentProvider.host);
             if (rpcIndex < RPC_URLS.length - 1) {
                 console.log(`Switching to fallback RPC: ${RPC_URLS[rpcIndex + 1]}`);
                 web3.setProvider(new Web3.providers.HttpProvider(RPC_URLS[rpcIndex + 1]));
@@ -264,10 +262,10 @@ async function initWeb3(rpcIndex = 0, maxRetries = 3) {
 
         return true;
     } catch (error) {
-        console.error(`Error initializing Web3:`, error);
+        console.error(`Error initializing Web3 with RPC ${RPC_URLS[rpcIndex]}:`, error);
         if (rpcIndex < RPC_URLS.length - 1) {
             console.log(`Retrying with next RPC: ${RPC_URLS[rpcIndex + 1]}`);
-            await new Promise(resolve => setTimeout(resolve, 3000)); // Increased delay
+            await new Promise(resolve => setTimeout(resolve, 3000));
             return await initWeb3(rpcIndex + 1, maxRetries);
         }
         const message = `Failed to connect to MetaMask or RPC endpoints: ${error.message}. Please check your MetaMask connection and try again.`;
@@ -327,6 +325,18 @@ function truncateAddress(address) {
 function getMemberName(address) {
     const memberNames = JSON.parse(localStorage.getItem('memberNames') || '{}');
     return memberNames[address?.toLowerCase()] || truncateAddress(address);
+}
+
+function updateMemberName(address) {
+    const currentName = getMemberName(address);
+    const newName = prompt(`Enter new name for ${currentName} (${truncateAddress(address)}):`, currentName);
+    if (newName && newName.trim() && newName !== currentName) {
+        const memberNames = JSON.parse(localStorage.getItem('memberNames') || '{}');
+        memberNames[address.toLowerCase()] = newName.trim();
+        localStorage.setItem('memberNames', JSON.stringify(memberNames));
+        console.log(`Updated name for ${address} to ${newName}`);
+        populateDashboard(); // Refresh dashboard to reflect new name
+    }
 }
 
 async function loadBlockiesScript() {
@@ -588,25 +598,6 @@ async function getSettlementLines(groupId, members, balances) {
     }
 }
 
-function getSettlementHistory(groupId) {
-    const history = JSON.parse(localStorage.getItem(`settlementHistory_${groupId}`) || '[]');
-    return history;
-}
-
-function addSettlementToHistory(groupId, fromAddr, toAddr, amount) {
-    const history = getSettlementHistory(groupId);
-    const timestamp = new Date().toLocaleString();
-    history.push({
-        timestamp,
-        fromAddr,
-        toAddr,
-        amount,
-        fromName: getMemberName(fromAddr),
-        toName: getMemberName(toAddr)
-    });
-    localStorage.setItem(`settlementHistory_${groupId}`, JSON.stringify(history));
-}
-
 async function populateDashboard() {
     const dashboardContent = document.getElementById('dashboardContent');
     if (!dashboardContent) {
@@ -713,7 +704,6 @@ async function populateDashboard() {
                 ).then(results => results.filter(exp => exp !== null));
                 const contributionBreakdown = await calculateContributionBreakdown(groupId, members, groupExpenses);
                 const settlementLines = await getSettlementLines(groupId, balMembers, balances);
-                const settlementHistory = getSettlementHistory(groupId);
                 const groupDiv = document.createElement('div');
                 groupDiv.className = 'group';
                 groupDiv.innerHTML = `
@@ -727,6 +717,7 @@ async function populateDashboard() {
                             <span class="member-item">
                                 <img src="${avatar}" class="member-avatar" alt="${name} Avatar">
                                 <span class="member-name">${name} (${addr.slice(0, 7)})</span>
+                                <button class="edit-name-button" data-address="${addr}" title="Edit Name">✏️</button>
                             </span>
                         `).join('')}
                     </div>
@@ -735,10 +726,10 @@ async function populateDashboard() {
                     <h4>Who Owes Whom:</h4>
                     <div class="settlement-container">
                         ${settlementLines.length > 0 ? settlementLines.map(line => `
-                            <div class="settlement-line ${line.amount > 0 ? (line.toAddr.toLowerCase() === userAddress.toLowerCase() ? 'positive' : 'negative') : 'settled'}" data-from="${line.fromAddr}" data-to="${line.toAddr}" data-amount="${line.amount}">
-                                <span class="settlement-icon">${line.amount > 0 ? (line.toAddr.toLowerCase() === userAddress.toLowerCase() ? '↑' : '↓') : ''}</span>
+                            <div class="settlement-line ${line.fromAddr.toLowerCase() === userAddress.toLowerCase() ? 'negative' : 'positive'}" data-from="${line.fromAddr}" data-to="${line.toAddr}" data-amount="${line.amount}">
+                                <span class="settlement-icon">${line.fromAddr.toLowerCase() === userAddress.toLowerCase() ? '↓' : '↑'}</span>
                                 <span>${line.fromName} (${line.fromAddr.slice(0, 7)}) → ${line.toName} (${line.toAddr.slice(0, 7)}): ${line.amount} SHM</span>
-                                ${line.amount > 0 ? '<button class="mark-paid-button">Mark as Paid</button>' : ''}
+                                ${line.fromAddr.toLowerCase() === userAddress.toLowerCase() ? `<button class="settle-now-button" data-group-id="${groupId}" data-to="${line.toAddr}" data-amount="${line.amount}">Settle Now</button>` : ''}
                             </div>
                         `).join('') : '<p>No settlements needed.</p>'}
                     </div>
@@ -776,13 +767,6 @@ async function populateDashboard() {
                             `).join('')}
                         </tbody>
                     </table>
-                    <h4>Settlement History:</h4>
-                    <div class="history-toggle" data-group-id="${groupId}">Show Settlement History</div>
-                    <div class="history-log" id="history-log-${groupId}">
-                        ${settlementHistory.length > 0 ? settlementHistory.map(h => `
-                            <div class="history-item">${h.timestamp}: ${h.fromName} (${h.fromAddr.slice(0, 7)}) paid ${h.toName} (${h.toAddr.slice(0, 7)}) ${h.amount} SHM</div>
-                        `).join('') : '<p>No settlement history.</p>'}
-                    </div>
                     <h4>Settle Debt</h4>
                     <form id="settleDebtForm-${groupId}" class="settle-debt-form">
                         <input type="hidden" name="groupId" value="${groupId}">
@@ -853,7 +837,6 @@ async function populateDashboard() {
                             gasPrice: web3.utils.toWei('50', 'gwei')
                         });
                         settleMessage.textContent = 'Debt settled! Transaction: https://explorer-unstable.shardeum.org/tx/' + tx.transactionHash;
-                        addSettlementToHistory(settleGroupId, userAddress, toAddress, amountInput);
                         this.reset();
                         await populateDashboard();
                     } catch (error) {
@@ -861,26 +844,43 @@ async function populateDashboard() {
                         settleMessage.textContent = 'Error: ' + (error.message.includes('revert') ? 'Invalid input or insufficient debt. Check inputs and try again.' : error.message);
                     }
                 });
-                const historyToggle = groupDiv.querySelector(`.history-toggle[data-group-id="${groupId}"]`);
-                const historyLog = document.getElementById(`history-log-${groupId}`);
-                historyToggle.addEventListener('click', () => {
-                    historyLog.classList.toggle('active');
-                    historyToggle.textContent = historyLog.classList.contains('active') ? 'Hide Settlement History' : 'Show Settlement History';
-                });
-                const markPaidButtons = groupDiv.querySelectorAll('.mark-paid-button');
-                markPaidButtons.forEach(button => {
+                const editNameButtons = groupDiv.querySelectorAll('.edit-name-button');
+                editNameButtons.forEach(button => {
                     button.addEventListener('click', () => {
-                        const settlementLine = button.parentElement;
-                        const fromAddr = settlementLine.dataset.from;
-                        const toAddr = settlementLine.dataset.to;
-                        const amount = settlementLine.dataset.amount;
-                        addSettlementToHistory(groupId, fromAddr, toAddr, amount);
-                        settlementLine.classList.add('settled');
-                        settlementLine.querySelector('.settlement-icon').textContent = '';
-                        button.classList.add('disabled');
-                        button.disabled = true;
-                        button.textContent = 'Paid';
-                        populateDashboard();
+                        const address = button.dataset.address;
+                        updateMemberName(address);
+                    });
+                });
+                const settleNowButtons = groupDiv.querySelectorAll('.settle-now-button');
+                settleNowButtons.forEach(button => {
+                    button.addEventListener('click', async () => {
+                        if (!web3 || !getContract() || !getAccount()) {
+                            alert('Please connect MetaMask first.');
+                            return;
+                        }
+                        const settleGroupId = button.dataset.groupId;
+                        const toAddress = button.dataset.to;
+                        const amountInput = button.dataset.amount;
+                        const settleMessage = document.getElementById(`settleMessage-${settleGroupId}`);
+                        let amount;
+                        try {
+                            amount = web3.utils.toWei(amountInput, 'ether');
+                        } catch (error) {
+                            settleMessage.textContent = 'Invalid amount format.';
+                            return;
+                        }
+                        try {
+                            const tx = await getContract().methods.settleDebt(settleGroupId, toAddress, amount).send({
+                                from: await getAccount(),
+                                value: '0',
+                                gasPrice: web3.utils.toWei('50', 'gwei')
+                            });
+                            settleMessage.textContent = 'Debt settled! Transaction: https://explorer-unstable.shardeum.org/tx/' + tx.transactionHash;
+                            await populateDashboard();
+                        } catch (error) {
+                            console.error(`Debt settlement error for group ${settleGroupId}:`, error);
+                            settleMessage.textContent = 'Error: ' + (error.message.includes('revert') ? 'Invalid input or insufficient debt.' : error.message);
+                        }
                     });
                 });
             } catch (error) {
