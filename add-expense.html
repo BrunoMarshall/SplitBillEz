@@ -5,15 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Add Expense - SplitBillEz</title>
     <link rel="stylesheet" href="css/style.css">
-    <link rel="icon" href="images/splitbillez_favicon.png">
-    <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js" defer></script>
-    <script src="js/ethereum-blockies-base64.min.js" defer></script>
-    <script src="js/app.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.7.3/dist/web3.min.js"></script>
 </head>
 <body>
     <header>
         <div class="header-container">
-            <img src="images/splitbillez_logo.svg" alt="SplitBillEz Logo" class="logo">
+            <img src="images/logo.png" alt="SplitBillEz Logo" class="logo">
             <nav>
                 <a href="index.html">Home</a>
                 <a href="dashboard.html">Dashboard</a>
@@ -25,18 +22,40 @@
     <main>
         <section>
             <h2>Add a New Expense</h2>
-            <form id="expenseForm" style="display: none;">
-                <label for="groupId">Group:</label>
+            <form id="expenseForm">
+                <input type="hidden" id="userAddress">
+                <label for="groupId">Select Group:</label>
                 <select id="groupId" required>
                     <option value="" disabled selected>Loading groups...</option>
                 </select>
-                <label for="description">Description:</label>
+                <div id="groupCreation" style="display: none;">
+                    <h3>Create a New Group</h3>
+                    <label for="groupName">Group Name:</label>
+                    <input type="text" id="groupName" placeholder="e.g., Friends Trip">
+                    <label>Members:</label>
+                    <div id="memberInputs">
+                        <div class="member-input">
+                            <span class="member-label">You:</span>
+                            <input type="text" class="member-name" placeholder="Your Name (e.g., Alice)" value="Me" readonly>
+                            <input type="text" class="member-address" value="Your wallet address" readonly>
+                            <button type="button" class="remove-member" style="display: none;">Remove</button>
+                        </div>
+                        <div class="member-input">
+                            <span class="member-label">Member 1:</span>
+                            <input type="text" class="member-name" placeholder="Member Name (e.g., Bob)">
+                            <input type="text" class="member-address" placeholder="e.g., 0x742d...">
+                            <button type="button" class="remove-member">Remove</button>
+                        </div>
+                    </div>
+                    <button type="button" id="addMemberButton">Add Member</button>
+                </div>
+                <label for="description">Expense Description:</label>
                 <input type="text" id="description" placeholder="e.g., Dinner at Restaurant" required>
                 <label for="amount">Amount:</label>
-                <input type="number" id="amount" placeholder="e.g., 100" step="0.01" required>
+                <input type="number" id="amount" placeholder="Enter amount" step="0.01" required>
                 <label for="currency">Currency:</label>
                 <select id="currency" required>
-                    <option value="usd" selected>USD</option>
+                    <option value="usd">USD</option>
                     <option value="eur">EUR</option>
                     <option value="inr">INR</option>
                     <option value="shm">SHM</option>
@@ -45,58 +64,22 @@
                 <label for="split">Split Type:</label>
                 <select id="split" required>
                     <option value="equal">Equal</option>
-                    <option value="custom">Custom (% shares, sum to 100)</option>
+                    <option value="custom">Custom</option>
                 </select>
-                <label for="customShares" id="customLabel" style="display: none;">Custom Shares (%, comma-separated):</label>
-                <input type="text" id="customShares" placeholder="e.g., 40,30,30" style="display: none;">
-                <button type="submit" id="submitExpenseButton" class="submit-button">Add Expense</button>
-                <p id="expenseMessage"></p>
+                <label for="customShares" id="customLabel" style="display: none;">Custom Shares (%):</label>
+                <input type="text" id="customShares" placeholder="e.g., 20,30,50" style="display: none;">
+                <button type="submit" id="submitButton" class="submit-button">Add Expense</button>
             </form>
-            <h2>Create a New Group</h2>
-            <form id="createGroupForm" style="display: none;">
-                <label for="groupName">Group Name:</label>
-                <input type="text" id="groupName" placeholder="e.g., Trip to Goa" required>
-                <label>Member Addresses:</label>
-                <div id="memberInputs">
-                    <div class="member-input">
-                        <input type="text" class="member-name" value="Me" readonly>
-                        <input type="text" class="member-address" id="userAddress" readonly>
-                        <span class="member-label">Your Address</span>
-                    </div>
-                    <div class="member-input">
-                        <input type="text" class="member-name" placeholder="Member Name (e.g., Bob)">
-                        <input type="text" class="member-address" placeholder="e.g., 0x742d..." required>
-                        <button type="button" class="remove-member">Remove</button>
-                    </div>
-                </div>
-                <button type="button" id="addMemberButton">Add Member</button>
-                <button type="submit" id="submitGroupButton" class="submit-group">Create Group</button>
-                <p id="groupMessage"></p>
-            </form>
+            <p id="expenseMessage"></p>
         </section>
     </main>
     <footer>
-        <p>© 2025 SplitBillEz Powered by Shardeum</p>
+        <p>&copy; 2025 SplitBillEz. All rights reserved.</p>
         <div class="social-links">
-            <a href="https://discord.com/invite/shardeum" target="_blank" rel="nofollow">
-                <img src="images/discord.svg" alt="Discord" class="social-icon">
-            </a>
-            <a href="https://github.com/BrunoMarshall/SplitBillEz" target="_blank" rel="nofollow">
-                <img src="images/github.svg" alt="GitHub" class="social-icon">
-            </a>
-            <a href="https://www.linkedin.com/company/shardeum/" target="_blank" rel="nofollow">
-                <img src="images/linkedin.svg" alt="LinkedIn" class="social-icon">
-            </a>
-            <a href="https://t.me/shardeum" target="_blank" rel="nofollow">
-                <img src="images/telegram.svg" alt="Telegram" class="social-icon">
-            </a>
-            <a href="https://x.com/shardeum" target="_blank" rel="nofollow">
-                <img src="images/twitter.svg" alt="X" class="social-icon">
-            </a>
-            <a href="https://www.youtube.com/@shardeum" target="_blank" rel="nofollow">
-                <img src="images/youtube.svg" alt="YouTube" class="social-icon">
-            </a>
+            <a href="https://x.com/splitbillez" target="_blank"><img src="images/x-icon.png" alt="X" class="social-icon"></a>
+            <a href="https://github.com/splitbillez" target="_blank"><img src="images/github-icon.png" alt="GitHub" class="social-icon"></a>
         </div>
     </footer>
+    <script src="js/app.js"></script>
 </body>
 </html>
