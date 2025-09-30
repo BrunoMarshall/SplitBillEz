@@ -274,6 +274,15 @@ async function initWeb3(rpcIndex = 0, maxRetries = 3) {
         console.log('Connected account:', userAccount);
         console.log('Contract initialized:', !!contract);
 
+        // Verify contract initialization
+        try {
+            await contract.methods.groupCount().call();
+            console.log('Contract verification successful');
+        } catch (error) {
+            console.error('Contract verification failed:', error);
+            throw new Error('Failed to verify contract initialization');
+        }
+
         // Listen for GroupSettled events
         contract.events.GroupSettled({
             filter: {},
@@ -334,10 +343,10 @@ async function handleMetaMaskToggle() {
     if (userAccount) {
         await disconnectWallet();
     } else {
-        await initWeb3();
-        if (document.getElementById('groupId')) {
+        const initialized = await initWeb3();
+        if (initialized && document.getElementById('groupId')) {
             await populateGroupDropdown();
-        } else if (document.getElementById('dashboardContent')) {
+        } else if (initialized && document.getElementById('dashboardContent')) {
             await populateDashboard();
         }
     }
@@ -346,7 +355,7 @@ async function handleMetaMaskToggle() {
 async function updateUI() {
     const buttons = document.querySelectorAll('.metamask-button');
     buttons.forEach(btn => {
-        if (userAccount) {
+        if (userAccount && contract) {
             btn.textContent = `Disconnect (${userAccount.slice(0,6)}...${userAccount.slice(-4)})`;
             btn.style.backgroundColor = '#28a745';
             btn.disabled = false;
@@ -402,7 +411,12 @@ function updateGroupName(groupId) {
 
 async function isGroupSettled(groupId) {
     try {
-        const isSettled = await getContract().methods.getGroupSettledStatus(groupId).call();
+        const contractInstance = await getContract();
+        if (!contractInstance) {
+            console.error('Contract not initialized in isGroupSettled');
+            return false;
+        }
+        const isSettled = await contractInstance.methods.getGroupSettledStatus(groupId).call();
         if (isSettled) {
             const settledGroups = JSON.parse(localStorage.getItem('settledGroups') || '{}');
             settledGroups[groupId] = true;
@@ -417,7 +431,12 @@ async function isGroupSettled(groupId) {
 
 async function fetchSettlementHistory(groupId) {
     try {
-        const events = await getContract().getPastEvents('DebtSettled', {
+        const contractInstance = await getContract();
+        if (!contractInstance) {
+            console.error('Contract not initialized in fetchSettlementHistory');
+            return [];
+        }
+        const events = await contractInstance.getPastEvents('DebtSettled', {
             filter: { groupId },
             fromBlock: 0,
             toBlock: 'latest'
@@ -540,9 +559,12 @@ async function checkMetaMaskConnection() {
             return;
         }
         console.log('MetaMask provider detected');
-        if (!web3) {
+        if (!web3 || !contract) {
             console.log('Initializing Web3...');
-            await initWeb3();
+            const initialized = await initWeb3();
+            if (!initialized) {
+                throw new Error('Web3 initialization failed');
+            }
         }
         const account = await getAccount();
         console.log('MetaMask connected on load:', account);
@@ -565,7 +587,7 @@ async function checkMetaMaskConnection() {
         }
     } catch (error) {
         console.error('Error checking MetaMask connection:', error);
-        const message = 'Error checking MetaMask connection: ' + error.message + '. Please refresh and reconnect MetaMask.';
+        const message = 'Error connecting to MetaMask or blockchain network: ' + error.message + '. Please refresh and reconnect MetaMask.';
         if (document.getElementById('dashboardContent')) {
             document.getElementById('dashboardContent').innerHTML = message;
         } else if (document.getElementById('expenseMessage')) {
@@ -589,8 +611,21 @@ async function getAccount() {
 }
 
 async function getContract() {
+    if (!web3) {
+        console.error('Web3 not initialized in getContract');
+        return null;
+    }
     if (!contract) {
-        contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
+        try {
+            contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
+            console.log('Contract initialized in getContract:', !!contract);
+            // Verify contract
+            await contract.methods.groupCount().call();
+        } catch (error) {
+            console.error('Error initializing contract in getContract:', error);
+            contract = null;
+            return null;
+        }
     }
     return contract;
 }
@@ -619,14 +654,25 @@ async function populateGroupDropdown() {
         if (!account) {
             groupSelect.innerHTML = '<option value="" disabled selected>Connect MetaMask to load groups</option>';
             toggleExpenseForm(false);
+            expenseMessage.textContent = 'Please connect MetaMask to load groups.';
+            expenseMessage.classList.add('success');
             return;
         }
 
-        const groupCount = parseInt(await getContract().methods.groupCount().call()) || 0;
+        const contractInstance = await getContract();
+        if (!contractInstance) {
+            groupSelect.innerHTML = '<option value="" disabled selected>Error loading contract</option>';
+            toggleExpenseForm(false);
+            expenseMessage.textContent = 'Error: Unable to connect to blockchain contract. Please check your MetaMask connection.';
+            expenseMessage.classList.add('success');
+            return;
+        }
+
+        const groupCount = parseInt(await contractInstance.methods.groupCount().call()) || 0;
         const groups = [];
         for (let i = 1; i <= groupCount; i++) {
             try {
-                const group = await getContract().methods.getGroup(i).call();
+                const group = await contractInstance.methods.getGroup(i).call();
                 const members = group[1] || [];
                 if (members.some(addr => addr.toLowerCase() === account.toLowerCase())) {
                     const isSettled = await isGroupSettled(i);
@@ -691,6 +737,13 @@ async function handleExpenseFormSubmit(e) {
     if (!groupId || !expenseMessage) return;
 
     try {
+        const contractInstance = await getContract();
+        if (!contractInstance) {
+            expenseMessage.textContent = 'Error: Unable to connect to blockchain contract. Please check your MetaMask connection.';
+            expenseMessage.classList.add('success');
+            return;
+        }
+
         if (groupId === 'create') {
             const groupName = document.getElementById('groupName')?.value?.trim();
             if (!groupName) {
@@ -707,15 +760,20 @@ async function handleExpenseFormSubmit(e) {
                 return;
             }
             const account = await getAccount();
+            if (!account) {
+                expenseMessage.textContent = 'Error: No account connected. Please reconnect MetaMask.';
+                expenseMessage.classList.add('success');
+                return;
+            }
             if (!members.includes(account)) {
                 members.unshift(account);
             }
-            const tx = await getContract().methods.createGroup(groupName, members).send({
+            const tx = await contractInstance.methods.createGroup(groupName, members).send({
                 from: account,
                 value: '0',
                 gasPrice: web3.utils.toWei('50', 'gwei')
             });
-            const newGroupId = parseInt(await getContract().methods.groupCount().call());
+            const newGroupId = parseInt(await contractInstance.methods.groupCount().call());
             const groupNames = JSON.parse(localStorage.getItem('groupNames') || '{}');
             groupNames[newGroupId] = groupName;
             localStorage.setItem('groupNames', JSON.stringify(groupNames));
@@ -752,8 +810,14 @@ async function handleExpenseFormSubmit(e) {
                     return;
                 }
             }
-            const tx = await getContract().methods.addExpense(groupId, description, amount, splitType, customShares).send({
-                from: await getAccount(),
+            const account = await getAccount();
+            if (!account) {
+                expenseMessage.textContent = 'Error: No account connected. Please reconnect MetaMask.';
+                expenseMessage.classList.add('success');
+                return;
+            }
+            const tx = await contractInstance.methods.addExpense(groupId, description, amount, splitType, customShares).send({
+                from: account,
                 value: '0',
                 gasPrice: web3.utils.toWei('50', 'gwei')
             });
@@ -887,11 +951,17 @@ async function populateDashboard() {
             return;
         }
 
-        const groupCount = parseInt(await getContract().methods.groupCount().call()) || 0;
+        const contractInstance = await getContract();
+        if (!contractInstance) {
+            dashboardContent.innerHTML = 'Error: Unable to connect to blockchain contract. Please check your MetaMask connection.';
+            return;
+        }
+
+        const groupCount = parseInt(await contractInstance.methods.groupCount().call()) || 0;
         const groups = [];
         for (let i = 1; i <= groupCount; i++) {
             try {
-                const group = await getContract().methods.getGroup(i).call();
+                const group = await contractInstance.methods.getGroup(i).call();
                 const members = group[1] || [];
                 if (members.some(addr => addr.toLowerCase() === account.toLowerCase())) {
                     const isSettled = await isGroupSettled(i);
@@ -927,9 +997,9 @@ async function populateDashboard() {
             if (!showSettled && group.settled) continue;
 
             const expenses = [];
-            const expenseIds = await getContract().methods.getGroupExpenseIds(group.id).call();
+            const expenseIds = await contractInstance.methods.getGroupExpenseIds(group.id).call();
             for (const expenseId of expenseIds) {
-                const expense = await getContract().methods.getExpense(expenseId).call();
+                const expense = await contractInstance.methods.getExpense(expenseId).call();
                 expenses.push({
                     id: expense[0],
                     description: expense[1],
@@ -940,7 +1010,7 @@ async function populateDashboard() {
                 });
             }
 
-            const balanceData = await getContract().methods.getGroupBalances(group.id).call();
+            const balanceData = await contractInstance.methods.getGroupBalances(group.id).call();
             const balMembers = balanceData[0] || [];
             const balances = balanceData[1] || [];
 
@@ -1031,8 +1101,13 @@ async function populateDashboard() {
                 if (!group.settled) {
                     settlementDiv.querySelector('.mark-paid-button').addEventListener('click', async () => {
                         try {
+                            const contractInstance = await getContract();
+                            if (!contractInstance) {
+                                alert('Error: Unable to connect to blockchain contract. Please check your MetaMask connection.');
+                                return;
+                            }
                             const amountWei = web3.utils.toWei(debtAmount, 'ether');
-                            const tx = await getContract().methods.settleDebt(group.id, member, amountWei).send({
+                            const tx = await contractInstance.methods.settleDebt(group.id, member, amountWei).send({
                                 from: account,
                                 value: '0',
                                 gasPrice: web3.utils.toWei('50', 'gwei')
@@ -1092,6 +1167,11 @@ async function populateDashboard() {
 
 async function calculateContributionBreakdown(groupId, members, expenses) {
     try {
+        const contractInstance = await getContract();
+        if (!contractInstance) {
+            console.error('Contract not initialized in calculateContributionBreakdown');
+            return [];
+        }
         const breakdown = members.map(member => ({
             address: member,
             name: getMemberName(member),
@@ -1122,7 +1202,7 @@ async function calculateContributionBreakdown(groupId, members, expenses) {
             });
         }
 
-        const balanceData = await getContract().methods.getGroupBalances(groupId).call();
+        const balanceData = await contractInstance.methods.getGroupBalances(groupId).call();
         const balMembers = balanceData[0] || [];
         const balances = balanceData[1] || [];
         breakdown.forEach(b => {
@@ -1141,8 +1221,13 @@ async function calculateContributionBreakdown(groupId, members, expenses) {
 
 async function getDebtAmount(groupId, toAddress) {
     try {
+        const contractInstance = await getContract();
+        if (!contractInstance) {
+            console.error('Contract not initialized in getDebtAmount');
+            return '0';
+        }
         const userAddress = await getAccount();
-        const balanceData = await getContract().methods.getGroupBalances(groupId).call();
+        const balanceData = await contractInstance.methods.getGroupBalances(groupId).call();
         const balMembers = balanceData[0] || [];
         const balances = balanceData[1] || [];
         const userIndex = balMembers.findIndex(addr => addr.toLowerCase() === userAddress.toLowerCase());
