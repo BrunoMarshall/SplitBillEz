@@ -80,30 +80,15 @@ form#expenseForm {
     background-color: #f9f9f9;
 }
 
-form#expenseForm.disabled-form {
-    opacity: 0.5;
-    pointer-events: none;
-}
-
-form#expenseForm.disabled-form select,
-form#expenseForm.disabled-form input,
-form#expenseForm.disabled-form button {
-    background-color: #e9ecef;
-    cursor: not-allowed;
-}
-
 form#createGroupForm {
     background-color: #e9ecef;
-    display: none; /* Hidden by default, toggled via JavaScript */
-}
-
-form#createGroupForm.active {
-    display: flex; /* Ensure form is visible when active */
+    display: flex; /* Ensure form is visible when toggled */
 }
 
 label {
     margin: 10px 0 5px;
     font-weight: bold;
+    color: #333; /* Ensure labels are visible */
 }
 
 input, select {
@@ -113,6 +98,8 @@ input, select {
     border-radius: 4px;
     width: 100%;
     box-sizing: border-box;
+    color: #333; /* Ensure input text is visible */
+    background-color: white; /* Prevent black background */
 }
 
 button {
@@ -171,7 +158,7 @@ button:hover {
 .member-label {
     flex: 0 0 20%;
     font-size: 0.9em;
-    color: #555;
+    color: #333; /* Ensure label is visible */
 }
 
 .remove-member {
