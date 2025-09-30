@@ -23,9 +23,9 @@ header {
 
 .logo {
     height: 50px;
-    opacity: 1 !important; /* Ensure no transparency */
-    background-color: transparent; /* No background interference */
-    object-fit: contain; /* Prevent stretching */
+    opacity: 1 !important;
+    background-color: transparent;
+    object-fit: contain;
 }
 
 nav a {
@@ -70,6 +70,18 @@ h2, h3 {
 form {
     display: flex;
     flex-direction: column;
+    margin-bottom: 20px;
+    padding: 15px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+form#expenseForm {
+    background-color: #f9f9f9;
+}
+
+form#createGroupForm {
+    background-color: #e9ecef;
 }
 
 label {
@@ -93,6 +105,14 @@ button {
 }
 
 button:hover {
+    background-color: #0056b3;
+}
+
+.submit-button {
+    background-color: #007bff;
+}
+
+.submit-button:hover {
     background-color: #0056b3;
 }
 
@@ -127,19 +147,19 @@ footer {
     background-color: #007bff;
     color: white;
     text-align: center;
-    padding: 5px 0; /* Reduced padding for smaller height */
+    padding: 5px 0;
     position: fixed;
     bottom: 0;
     width: 100%;
 }
 
 footer p {
-    font-size: 12px; /* Reduced font size for compactness */
+    font-size: 12px;
     margin: 5px 0;
 }
 
 .social-links {
-    margin-top: 5px; /* Reduced margin */
+    margin-top: 5px;
 }
 
 .social-icon {
@@ -168,7 +188,7 @@ footer p {
     width: 64px;
     height: 64px;
     border-radius: 50%;
-    order: -1; /* Move avatar to the left */
+    order: -1;
 }
 
 .members-container {
@@ -187,11 +207,11 @@ footer p {
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    order: -1; /* Move avatar to the left */
+    order: -1;
 }
 
 .member-name {
-    order: 0; /* Name follows avatar */
+    order: 0;
 }
 
 .expense-item {
@@ -204,7 +224,7 @@ footer p {
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    order: -1; /* Move avatar to the left of expense */
+    order: -1;
 }
 
 .balance-item {
@@ -217,7 +237,7 @@ footer p {
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    order: -1; /* Move avatar to the left of balance */
+    order: -1;
 }
 
 .settlement-line {
@@ -228,22 +248,21 @@ footer p {
 }
 
 .settlement-line.positive {
-    color: #28a745; /* Green for owed */
+    color: #28a745;
 }
 
 .settlement-line.negative {
-    color: #dc3545; /* Red for owes */
+    color: #dc3545;
 }
 
 .settlement-line.settled {
-    color: #6c757d; /* Grey for settled */
+    color: #6c757d;
 }
 
 .settlement-icon {
     font-size: 18px;
 }
 
-/* Contribution Breakdown Table */
 .contribution-table {
     width: 100%;
     border-collapse: collapse;
@@ -274,7 +293,6 @@ footer p {
     color: #6c757d;
 }
 
-/* Progress Bar */
 .progress-container {
     width: 100%;
     background-color: #f4f4f4;
@@ -289,7 +307,6 @@ footer p {
     transition: width 0.3s;
 }
 
-/* Mark as Paid Button */
 .mark-paid-button {
     background-color: #17a2b8;
     color: white;
@@ -309,7 +326,6 @@ footer p {
     cursor: not-allowed;
 }
 
-/* Settlement History */
 .history-toggle {
     cursor: pointer;
     color: #007bff;
@@ -338,7 +354,6 @@ footer p {
     font-size: 14px;
 }
 
-/* Edit Name Button */
 .edit-name-button {
     background-color: transparent;
     border: none;
@@ -353,7 +368,6 @@ footer p {
     color: #0056b3;
 }
 
-/* Edit Group Name Button */
 .edit-group-name-button {
     background-color: transparent;
     border: none;
@@ -368,7 +382,6 @@ footer p {
     color: #0056b3;
 }
 
-/* Toggle Settled Groups Button */
 .toggle-settled-button {
     background-color: #6c757d;
     color: white;
@@ -383,20 +396,17 @@ footer p {
     background-color: #5a6268;
 }
 
-/* Settled Group */
 .settled-group {
     opacity: 0.6;
     background-color: #f8f9fa;
 }
 
-/* Disabled Form */
 .disabled-form {
     opacity: 0.5;
     pointer-events: none;
 }
 
-/* Success Message */
-#expenseMessage.success {
+#expenseMessage.success, #groupMessage.success {
     color: #28a745;
     font-weight: bold;
 }

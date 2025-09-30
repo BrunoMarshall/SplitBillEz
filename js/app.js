@@ -274,7 +274,6 @@ async function initWeb3(rpcIndex = 0, maxRetries = 3) {
         console.log('Connected account:', userAccount);
         console.log('Contract initialized:', !!contract);
 
-        // Verify contract initialization
         try {
             await contract.methods.groupCount().call();
             console.log('Contract verification successful');
@@ -283,7 +282,6 @@ async function initWeb3(rpcIndex = 0, maxRetries = 3) {
             throw new Error('Failed to verify contract initialization');
         }
 
-        // Listen for GroupSettled events
         contract.events.GroupSettled({
             filter: {},
             fromBlock: 'latest'
@@ -630,15 +628,14 @@ async function getContract() {
 }
 
 async function toggleExpenseForm(enable) {
-    const expenseFields = document.getElementById('expenseFields');
-    const submitButton = document.getElementById('submitButton');
-    if (!expenseFields || !submitButton) return;
+    const expenseForm = document.getElementById('expenseForm');
+    if (!expenseForm) return;
     if (enable) {
-        expenseFields.classList.remove('disabled-form');
-        submitButton.textContent = 'Add Expense';
+        expenseForm.classList.remove('disabled-form');
+        document.getElementById('submitExpenseButton').textContent = 'Add Expense';
     } else {
-        expenseFields.classList.add('disabled-form');
-        submitButton.textContent = 'Create Group';
+        expenseForm.classList.add('disabled-form');
+        document.getElementById('submitExpenseButton').textContent = 'Add Expense (Select Group)';
     }
 }
 
@@ -686,7 +683,6 @@ async function populateGroupDropdown() {
         if (groups.length === 0) {
             groupSelect.innerHTML = '<option value="" disabled selected>No groups found</option><option value="create">Create a new group</option>';
             toggleExpenseForm(false);
-            document.getElementById('groupCreation').style.display = 'block';
             expenseMessage.textContent = 'No groups found. Please create a new group.';
             expenseMessage.classList.add('success');
         } else {
@@ -715,46 +711,99 @@ async function populateGroupDropdown() {
 
 async function toggleGroupCreation() {
     const groupId = document.getElementById('groupId')?.value;
-    const groupCreation = document.getElementById('groupCreation');
-    const expenseFields = document.getElementById('expenseFields');
-    const submitButton = document.getElementById('submitButton');
-    const groupSelect = document.getElementById('groupId');
-    if (!groupCreation || !expenseFields || !submitButton || !groupSelect) return;
+    const createGroupForm = document.getElementById('createGroupForm');
+    if (!createGroupForm) return;
 
     if (groupId === 'create') {
-        groupCreation.style.display = 'block';
+        createGroupForm.style.display = 'block';
         toggleExpenseForm(false);
-        groupSelect.removeAttribute('required'); // Remove required attribute
-        console.log('Required attribute removed from groupId:', !groupSelect.hasAttribute('required')); // Debug
+        console.log('Showing group creation form');
     } else {
-        groupCreation.style.display = 'none';
-        toggleExpenseForm(true);
-        groupSelect.setAttribute('required', ''); // Restore required attribute
-        console.log('Required attribute restored on groupId:', groupSelect.hasAttribute('required')); // Debug
+        createGroupForm.style.display = 'none';
+        toggleExpenseForm(groupId !== '');
+        console.log('Hiding group creation form, expense form enabled:', groupId !== '');
+    }
+}
+
+async function handleCreateGroupFormSubmit(e) {
+    e.preventDefault();
+    const form = e.target;
+    const groupMessage = document.getElementById('groupMessage');
+    if (!groupMessage) return;
+
+    try {
+        const contractInstance = await getContract();
+        if (!contractInstance) {
+            groupMessage.textContent = 'Error: Unable to connect to blockchain contract. Please check your MetaMask connection.';
+            groupMessage.classList.add('success');
+            return;
+        }
+
+        const groupName = document.getElementById('groupName')?.value?.trim();
+        if (!groupName) {
+            groupMessage.textContent = 'Please enter a group name.';
+            groupMessage.classList.add('success');
+            return;
+        }
+
+        const members = Array.from(document.querySelectorAll('#memberInputs .member-address'))
+            .map(input => input.value?.trim())
+            .filter(address => web3.utils.isAddress(address));
+        if (members.length < 2) {
+            groupMessage.textContent = 'Please add at least one other valid member address.';
+            groupMessage.classList.add('success');
+            return;
+        }
+
+        const account = await getAccount();
+        if (!account) {
+            groupMessage.textContent = 'Error: No account connected. Please reconnect MetaMask.';
+            groupMessage.classList.add('success');
+            return;
+        }
+
+        if (!members.includes(account)) {
+            members.unshift(account);
+        }
+
+        const tx = await contractInstance.methods.createGroup(groupName, members).send({
+            from: account,
+            value: '0',
+            gasPrice: web3.utils.toWei('50', 'gwei')
+        });
+
+        const newGroupId = parseInt(await contractInstance.methods.groupCount().call());
+        const groupNames = JSON.parse(localStorage.getItem('groupNames') || '{}');
+        groupNames[newGroupId] = groupName;
+        localStorage.setItem('groupNames', JSON.stringify(groupNames));
+
+        groupMessage.innerHTML = `<strong>Group created successfully!</strong> Select group ID ${newGroupId} to add expenses. <a href="https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}" target="_blank">View Tx</a>`;
+        groupMessage.classList.add('success');
+
+        setTimeout(() => {
+            form.reset();
+            populateGroupDropdown();
+            document.getElementById('groupId').value = newGroupId;
+            toggleGroupCreation();
+        }, 3000);
+    } catch (error) {
+        console.error('Error creating group:', error);
+        groupMessage.textContent = 'Error: ' + error.message;
+        groupMessage.classList.add('success');
     }
 }
 
 async function handleExpenseFormSubmit(e) {
-    e.preventDefault(); // Prevent default form submission
-    e.stopPropagation(); // Stop event propagation to prevent browser validation
+    e.preventDefault();
     const form = e.target;
     const groupId = document.getElementById('groupId')?.value;
     const expenseMessage = document.getElementById('expenseMessage');
-    const groupSelect = document.getElementById('groupId');
-    if (!expenseMessage || !groupSelect) return;
+    if (!expenseMessage || !groupId) return;
 
-    // Log groupId and required state for debugging
-    console.log('Form submitted with groupId:', groupId, 'Required:', groupSelect.hasAttribute('required'));
-
-    // Bypass browser validation for group creation
     if (groupId === 'create') {
-        form.noValidate = true;
-        groupSelect.removeAttribute('required'); // Ensure required is removed
-        console.log('Validation bypassed for group creation, required removed:', !groupSelect.hasAttribute('required'));
-    } else {
-        form.noValidate = false;
-        groupSelect.setAttribute('required', ''); // Ensure required is set for expense
-        console.log('Validation enabled for expense addition, required set:', groupSelect.hasAttribute('required'));
+        expenseMessage.textContent = 'Please select an existing group or create a new group first.';
+        expenseMessage.classList.add('success');
+        return;
     }
 
     try {
@@ -765,114 +814,80 @@ async function handleExpenseFormSubmit(e) {
             return;
         }
 
-        if (groupId === 'create') {
-            const groupName = document.getElementById('groupName')?.value?.trim();
-            if (!groupName) {
-                expenseMessage.textContent = 'Please enter a group name.';
-                expenseMessage.classList.add('success');
-                return;
-            }
-            const members = Array.from(document.querySelectorAll('#memberInputs .member-address'))
-                .map(input => input.value?.trim())
-                .filter(address => web3.utils.isAddress(address));
-            if (members.length < 2) {
-                expenseMessage.textContent = 'Please add at least one other valid member address.';
-                expenseMessage.classList.add('success');
-                return;
-            }
-            const account = await getAccount();
-            if (!account) {
-                expenseMessage.textContent = 'Error: No account connected. Please reconnect MetaMask.';
-                expenseMessage.classList.add('success');
-                return;
-            }
-            if (!members.includes(account)) {
-                members.unshift(account);
-            }
-            const tx = await contractInstance.methods.createGroup(groupName, members).send({
-                from: account,
-                value: '0',
-                gasPrice: web3.utils.toWei('50', 'gwei')
-            });
-            const newGroupId = parseInt(await contractInstance.methods.groupCount().call());
-            const groupNames = JSON.parse(localStorage.getItem('groupNames') || '{}');
-            groupNames[newGroupId] = groupName;
-            localStorage.setItem('groupNames', JSON.stringify(groupNames));
-            expenseMessage.innerHTML = `<strong>Group created successfully!</strong> Select group ID ${newGroupId} to add expenses. <a href="https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}" target="_blank">View Tx</a>`;
+        if (!groupId || groupId === '') {
+            expenseMessage.textContent = 'Please select a valid group to add an expense.';
             expenseMessage.classList.add('success');
-            setTimeout(() => {
-                form.reset();
-                populateGroupDropdown();
-                document.getElementById('groupId').value = newGroupId;
-                toggleGroupCreation();
-            }, 3000);
-        } else {
-            if (!groupId || groupId === '') {
-                expenseMessage.textContent = 'Please select a valid group to add an expense.';
-                expenseMessage.classList.add('success');
-                return;
-            }
-            const isSettled = await isGroupSettled(groupId);
-            if (isSettled) {
-                expenseMessage.textContent = 'This group is settled and cannot accept new expenses.';
-                expenseMessage.classList.add('success');
-                return;
-            }
-            const description = document.getElementById('description')?.value?.trim();
-            if (!description) {
-                expenseMessage.textContent = 'Please enter a description for the expense.';
-                expenseMessage.classList.add('success');
-                return;
-            }
-            const amountInput = document.getElementById('amount')?.value;
-            if (!amountInput || isNaN(parseFloat(amountInput))) {
-                expenseMessage.textContent = 'Please enter a valid amount.';
-                expenseMessage.classList.add('success');
-                return;
-            }
-            const currency = document.getElementById('currency')?.value.toLowerCase();
-            const splitType = document.getElementById('split')?.value;
-            let customShares = [];
-            let amount = web3.utils.toWei(
-                (currency === 'shm' ? parseFloat(amountInput) : parseFloat(amountInput) / shmPrice[currency]).toFixed(18),
-                'ether'
-            );
-            if (splitType === 'custom') {
-                const customSharesInput = document.getElementById('customShares')?.value;
-                if (!customSharesInput) {
-                    expenseMessage.textContent = 'Please enter custom shares for the expense.';
-                    expenseMessage.classList.add('success');
-                    return;
-                }
-                customShares = customSharesInput.split(',').map(s => parseInt(s.trim()));
-                const sum = customShares.reduce((a, b) => a + b, 0);
-                if (sum !== 100) {
-                    expenseMessage.textContent = 'Custom shares must sum to 100%.';
-                    expenseMessage.classList.add('success');
-                    return;
-                }
-            }
-            const account = await getAccount();
-            if (!account) {
-                expenseMessage.textContent = 'Error: No account connected. Please reconnect MetaMask.';
-                expenseMessage.classList.add('success');
-                return;
-            }
-            const tx = await contractInstance.methods.addExpense(groupId, description, amount, splitType, customShares).send({
-                from: account,
-                value: '0',
-                gasPrice: web3.utils.toWei('50', 'gwei')
-            });
-            expenseMessage.innerHTML = `<strong>Expense added successfully!</strong> <a href="https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}" target="_blank">View Tx</a>`;
-            expenseMessage.classList.add('success');
-            setTimeout(() => {
-                form.reset();
-                document.getElementById('groupCreation').style.display = 'none';
-                toggleExpenseForm(true);
-            }, 3000);
+            return;
         }
+
+        const isSettled = await isGroupSettled(groupId);
+        if (isSettled) {
+            expenseMessage.textContent = 'This group is settled and cannot accept new expenses.';
+            expenseMessage.classList.add('success');
+            return;
+        }
+
+        const description = document.getElementById('description')?.value?.trim();
+        if (!description) {
+            expenseMessage.textContent = 'Please enter a description for the expense.';
+            expenseMessage.classList.add('success');
+            return;
+        }
+
+        const amountInput = document.getElementById('amount')?.value;
+        if (!amountInput || isNaN(parseFloat(amountInput))) {
+            expenseMessage.textContent = 'Please enter a valid amount.';
+            expenseMessage.classList.add('success');
+            return;
+        }
+
+        const currency = document.getElementById('currency')?.value.toLowerCase();
+        const splitType = document.getElementById('split')?.value;
+        let customShares = [];
+        let amount = web3.utils.toWei(
+            (currency === 'shm' ? parseFloat(amountInput) : parseFloat(amountInput) / shmPrice[currency]).toFixed(18),
+            'ether'
+        );
+
+        if (splitType === 'custom') {
+            const customSharesInput = document.getElementById('customShares')?.value;
+            if (!customSharesInput) {
+                expenseMessage.textContent = 'Please enter custom shares for the expense.';
+                expenseMessage.classList.add('success');
+                return;
+            }
+            customShares = customSharesInput.split(',').map(s => parseInt(s.trim()));
+            const sum = customShares.reduce((a, b) => a + b, 0);
+            if (sum !== 100) {
+                expenseMessage.textContent = 'Custom shares must sum to 100%.';
+                expenseMessage.classList.add('success');
+                return;
+            }
+        }
+
+        const account = await getAccount();
+        if (!account) {
+            expenseMessage.textContent = 'Error: No account connected. Please reconnect MetaMask.';
+            expenseMessage.classList.add('success');
+            return;
+        }
+
+        const tx = await contractInstance.methods.addExpense(groupId, description, amount, splitType, customShares).send({
+            from: account,
+            value: '0',
+            gasPrice: web3.utils.toWei('50', 'gwei')
+        });
+
+        expenseMessage.innerHTML = `<strong>Expense added successfully!</strong> <a href="https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}" target="_blank">View Tx</a>`;
+        expenseMessage.classList.add('success');
+
+        setTimeout(() => {
+            form.reset();
+            document.getElementById('customLabel').style.display = 'none';
+            document.getElementById('customShares').style.display = 'none';
+        }, 3000);
     } catch (error) {
-        console.error('Error submitting form:', error);
+        console.error('Error adding expense:', error);
         expenseMessage.textContent = 'Error: ' + error.message;
         expenseMessage.classList.add('success');
     }
@@ -914,6 +929,7 @@ async function updateSHMAmount() {
 
 function setupEventListeners() {
     const expenseForm = document.getElementById('expenseForm');
+    const createGroupForm = document.getElementById('createGroupForm');
     const groupIdSelect = document.getElementById('groupId');
     const splitSelect = document.getElementById('split');
     const addMemberButton = document.getElementById('addMemberButton');
@@ -927,6 +943,10 @@ function setupEventListeners() {
 
     if (expenseForm) {
         expenseForm.addEventListener('submit', handleExpenseFormSubmit);
+    }
+
+    if (createGroupForm) {
+        createGroupForm.addEventListener('submit', handleCreateGroupFormSubmit);
     }
 
     if (groupIdSelect) {
@@ -954,7 +974,7 @@ function setupEventListeners() {
             newMemberInput.className = 'member-input';
             newMemberInput.innerHTML = `
                 <input type="text" class="member-name" placeholder="Member Name (e.g., Bob)">
-                <input type="text" class="member-address" placeholder="e.g., 0x742d...">
+                <input type="text" class="member-address" placeholder="e.g., 0x742d..." required>
                 <button type="button" class="remove-member">Remove</button>
             `;
             memberInputs.appendChild(newMemberInput);
