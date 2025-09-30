@@ -388,3 +388,15 @@ footer p {
     opacity: 0.6;
     background-color: #f8f9fa;
 }
+
+/* Disabled Form */
+.disabled-form {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+/* Success Message */
+#expenseMessage.success {
+    color: #28a745;
+    font-weight: bold;
+}

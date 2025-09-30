@@ -321,6 +321,9 @@ async function disconnectWallet() {
         shmPrice = null;
         await updateUI();
         console.log('Wallet disconnected');
+        if (document.getElementById('expenseForm')) {
+            toggleExpenseForm(false);
+        }
     } catch (error) {
         console.error('Error disconnecting wallet:', error);
         alert('Failed to disconnect wallet: ' + error.message);
@@ -349,7 +352,7 @@ async function updateUI() {
             btn.disabled = false;
         } else {
             btn.textContent = 'Connect with MetaMask';
-            btn.style.backgroundColor = '#ffffff';
+            btn.style.backgroundColor = '#28a745';
             btn.disabled = false;
         }
     });
@@ -531,10 +534,9 @@ async function checkMetaMaskConnection() {
                 document.getElementById('dashboardContent').innerHTML = message;
             } else if (document.getElementById('expenseMessage')) {
                 document.getElementById('expenseMessage').innerHTML = message;
+                document.getElementById('expenseMessage').classList.add('success');
             }
-            if (isMobileDevice()) {
-                document.body.innerHTML += '<div style="text-align: center; margin-top: 20px;"><a href="metamask://dapp/www.splitbillez.com">Open in MetaMask</a></div>';
-            }
+            toggleExpenseForm(false);
             return;
         }
         console.log('MetaMask provider detected');
@@ -557,6 +559,8 @@ async function checkMetaMaskConnection() {
                 document.getElementById('dashboardContent').innerHTML = 'Please connect MetaMask to view your groups.';
             } else if (document.getElementById('expenseMessage')) {
                 document.getElementById('expenseMessage').textContent = 'Please connect MetaMask to load groups.';
+                document.getElementById('expenseMessage').classList.add('success');
+                toggleExpenseForm(false);
             }
         }
     } catch (error) {
@@ -566,38 +570,523 @@ async function checkMetaMaskConnection() {
             document.getElementById('dashboardContent').innerHTML = message;
         } else if (document.getElementById('expenseMessage')) {
             document.getElementById('expenseMessage').textContent = message;
+            document.getElementById('expenseMessage').classList.add('success');
         }
+        toggleExpenseForm(false);
     }
 }
 
-async function getDebtAmount(groupId, toAddress) {
+async function getAccount() {
+    if (!web3 || !window.ethereum) return null;
     try {
-        const userAddress = await getAccount();
-        const balanceData = await getContract().methods.getGroupBalances(groupId).call();
-        const balMembers = balanceData[0] || [];
-        const balances = balanceData[1] || [];
-        const userIndex = balMembers.findIndex(addr => addr.toLowerCase() === userAddress.toLowerCase());
-        const toIndex = balMembers.findIndex(addr => addr.toLowerCase() === toAddress.toLowerCase());
-        if (userIndex === -1 || toIndex === -1) {
-            console.log(`User ${userAddress} or recipient ${toAddress} not found in group ${groupId}`);
-            return '0';
-        }
-        const userBalance = parseFloat(web3.utils.fromWei(balances[userIndex] || '0', 'ether'));
-        const toBalance = parseFloat(web3.utils.fromWei(balances[toIndex] || '0', 'ether'));
-        if (userBalance <= 0) {
-            console.log(`User ${userAddress} has non-positive balance (${userBalance} SHM) in group ${groupId}`);
-            return '0';
-        }
-        if (toBalance >= 0) {
-            console.log(`Recipient ${toAddress} has non-negative balance (${toBalance} SHM) in group ${groupId}`);
-            return '0';
-        }
-        const debtAmount = Math.min(userBalance, Math.abs(toBalance));
-        console.log(`Calculated debt for group ${groupId}: ${userAddress} owes ${toAddress} ${debtAmount} SHM`);
-        return debtAmount.toFixed(2);
+        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+        userAccount = accounts[0] || null;
+        return userAccount;
     } catch (error) {
-        console.error(`Error calculating debt for group ${groupId}, to ${toAddress}:`, error);
-        return '0';
+        console.error('Error getting account:', error);
+        return null;
+    }
+}
+
+async function getContract() {
+    if (!contract) {
+        contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
+    }
+    return contract;
+}
+
+async function toggleExpenseForm(enable) {
+    const expenseFields = document.getElementById('expenseFields');
+    const submitButton = document.getElementById('submitButton');
+    if (!expenseFields || !submitButton) return;
+    if (enable) {
+        expenseFields.classList.remove('disabled-form');
+        submitButton.textContent = 'Add Expense';
+    } else {
+        expenseFields.classList.add('disabled-form');
+        submitButton.textContent = 'Create Group';
+    }
+}
+
+async function populateGroupDropdown() {
+    const groupSelect = document.getElementById('groupId');
+    const expenseMessage = document.getElementById('expenseMessage');
+    if (!groupSelect || !expenseMessage) return;
+
+    groupSelect.innerHTML = '<option value="" disabled selected>Loading groups...</option>';
+    try {
+        const account = await getAccount();
+        if (!account) {
+            groupSelect.innerHTML = '<option value="" disabled selected>Connect MetaMask to load groups</option>';
+            toggleExpenseForm(false);
+            return;
+        }
+
+        const groupCount = parseInt(await getContract().methods.groupCount().call()) || 0;
+        const groups = [];
+        for (let i = 1; i <= groupCount; i++) {
+            try {
+                const group = await getContract().methods.getGroup(i).call();
+                const members = group[1] || [];
+                if (members.some(addr => addr.toLowerCase() === account.toLowerCase())) {
+                    const isSettled = await isGroupSettled(i);
+                    groups.push({ id: i, name: getGroupName(i), settled: isSettled });
+                }
+            } catch (error) {
+                console.error(`Error fetching group ${i}:`, error);
+            }
+        }
+
+        groupSelect.innerHTML = '';
+        if (groups.length === 0) {
+            groupSelect.innerHTML = '<option value="" disabled selected>No groups found</option><option value="create">Create a new group</option>';
+            toggleExpenseForm(false);
+            document.getElementById('groupCreation').style.display = 'block';
+            expenseMessage.textContent = 'No groups found. Please create a new group.';
+            expenseMessage.classList.add('success');
+        } else {
+            groups.forEach(group => {
+                const option = document.createElement('option');
+                option.value = group.id;
+                option.textContent = `${group.name} (${group.id})${group.settled ? ' (Settled)' : ''}`;
+                groupSelect.appendChild(option);
+            });
+            const createOption = document.createElement('option');
+            createOption.value = 'create';
+            createOption.textContent = 'Create a new group';
+            groupSelect.appendChild(createOption);
+            toggleExpenseForm(true);
+            expenseMessage.textContent = '';
+            expenseMessage.classList.remove('success');
+        }
+    } catch (error) {
+        console.error('Error populating group dropdown:', error);
+        groupSelect.innerHTML = '<option value="" disabled selected>Error loading groups</option>';
+        toggleExpenseForm(false);
+        expenseMessage.textContent = 'Error loading groups: ' + error.message;
+        expenseMessage.classList.add('success');
+    }
+}
+
+async function toggleGroupCreation() {
+    const groupId = document.getElementById('groupId')?.value;
+    const groupCreation = document.getElementById('groupCreation');
+    const expenseFields = document.getElementById('expenseFields');
+    const submitButton = document.getElementById('submitButton');
+    if (!groupCreation || !expenseFields || !submitButton) return;
+
+    if (groupId === 'create') {
+        groupCreation.style.display = 'block';
+        toggleExpenseForm(false);
+    } else {
+        groupCreation.style.display = 'none';
+        toggleExpenseForm(true);
+    }
+}
+
+async function handleExpenseFormSubmit(e) {
+    e.preventDefault();
+    const groupId = document.getElementById('groupId')?.value;
+    const expenseMessage = document.getElementById('expenseMessage');
+    if (!groupId || !expenseMessage) return;
+
+    try {
+        if (groupId === 'create') {
+            const groupName = document.getElementById('groupName')?.value?.trim();
+            if (!groupName) {
+                expenseMessage.textContent = 'Please enter a group name.';
+                expenseMessage.classList.add('success');
+                return;
+            }
+            const members = Array.from(document.querySelectorAll('#memberInputs .member-address'))
+                .map(input => input.value?.trim())
+                .filter(address => web3.utils.isAddress(address));
+            if (members.length < 2) {
+                expenseMessage.textContent = 'Please add at least one other valid member address.';
+                expenseMessage.classList.add('success');
+                return;
+            }
+            const account = await getAccount();
+            if (!members.includes(account)) {
+                members.unshift(account);
+            }
+            const tx = await getContract().methods.createGroup(groupName, members).send({
+                from: account,
+                value: '0',
+                gasPrice: web3.utils.toWei('50', 'gwei')
+            });
+            const newGroupId = parseInt(await getContract().methods.groupCount().call());
+            const groupNames = JSON.parse(localStorage.getItem('groupNames') || '{}');
+            groupNames[newGroupId] = groupName;
+            localStorage.setItem('groupNames', JSON.stringify(groupNames));
+            expenseMessage.innerHTML = `<strong>Group created successfully!</strong> Select group ID ${newGroupId} to add expenses. <a href="https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}" target="_blank">View Tx</a>`;
+            expenseMessage.classList.add('success');
+            setTimeout(() => {
+                e.target.reset();
+                populateGroupDropdown();
+                document.getElementById('groupId').value = newGroupId;
+                toggleGroupCreation();
+            }, 3000);
+        } else {
+            const isSettled = await isGroupSettled(groupId);
+            if (isSettled) {
+                expenseMessage.textContent = 'This group is settled and cannot accept new expenses.';
+                expenseMessage.classList.add('success');
+                return;
+            }
+            const description = document.getElementById('description')?.value?.trim();
+            const amountInput = document.getElementById('amount')?.value;
+            const currency = document.getElementById('currency')?.value.toLowerCase();
+            const splitType = document.getElementById('split')?.value;
+            let customShares = [];
+            let amount = web3.utils.toWei(
+                (currency === 'shm' ? parseFloat(amountInput) : parseFloat(amountInput) / shmPrice[currency]).toFixed(18),
+                'ether'
+            );
+            if (splitType === 'custom') {
+                customShares = document.getElementById('customShares')?.value.split(',').map(s => parseInt(s.trim()));
+                const sum = customShares.reduce((a, b) => a + b, 0);
+                if (sum !== 100) {
+                    expenseMessage.textContent = 'Custom shares must sum to 100%.';
+                    expenseMessage.classList.add('success');
+                    return;
+                }
+            }
+            const tx = await getContract().methods.addExpense(groupId, description, amount, splitType, customShares).send({
+                from: await getAccount(),
+                value: '0',
+                gasPrice: web3.utils.toWei('50', 'gwei')
+            });
+            expenseMessage.innerHTML = `<strong>Expense added successfully!</strong> <a href="https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}" target="_blank">View Tx</a>`;
+            expenseMessage.classList.add('success');
+            setTimeout(() => {
+                e.target.reset();
+                document.getElementById('groupCreation').style.display = 'none';
+                toggleExpenseForm(true);
+            }, 3000);
+        }
+    } catch (error) {
+        console.error('Error submitting form:', error);
+        expenseMessage.textContent = 'Error: ' + error.message;
+        expenseMessage.classList.add('success');
+    }
+}
+
+async function fetchSHMPrice() {
+    try {
+        const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=shardeum&vs_currencies=usd,eur,inr');
+        const data = await response.json();
+        shmPrice = {
+            usd: data.shardeum.usd || 1,
+            eur: data.shardeum.eur || 1,
+            inr: data.shardeum.inr || 1
+        };
+        console.log('SHM Price fetched:', shmPrice);
+    } catch (error) {
+        console.error('Error fetching SHM price:', error);
+        shmPrice = { usd: 1, eur: 1, inr: 1 };
+    }
+}
+
+async function updateSHMAmount() {
+    const amountInput = document.getElementById('amount');
+    const currency = document.getElementById('currency')?.value.toLowerCase();
+    const shmAmountDisplay = document.getElementById('shmAmount');
+    if (!amountInput || !shmAmountDisplay || !currency) return;
+
+    const amount = parseFloat(amountInput.value);
+    if (isNaN(amount)) {
+        shmAmountDisplay.textContent = 'SHM Amount: Enter a valid amount';
+        return;
+    }
+    if (!shmPrice) {
+        await fetchSHMPrice();
+    }
+    const shmAmount = currency === 'shm' ? amount : amount / shmPrice[currency];
+    shmAmountDisplay.textContent = `SHM Amount: ${shmAmount.toFixed(4)} SHM`;
+}
+
+function setupEventListeners() {
+    const expenseForm = document.getElementById('expenseForm');
+    const groupIdSelect = document.getElementById('groupId');
+    const splitSelect = document.getElementById('split');
+    const addMemberButton = document.getElementById('addMemberButton');
+    const amountInput = document.getElementById('amount');
+    const currencySelect = document.getElementById('currency');
+    const metamaskButtons = document.querySelectorAll('.metamask-button');
+
+    if (metamaskButtons) {
+        metamaskButtons.forEach(btn => btn.addEventListener('click', handleMetaMaskToggle));
+    }
+
+    if (expenseForm) {
+        expenseForm.addEventListener('submit', handleExpenseFormSubmit);
+    }
+
+    if (groupIdSelect) {
+        groupIdSelect.addEventListener('change', toggleGroupCreation);
+    }
+
+    if (splitSelect) {
+        splitSelect.addEventListener('change', () => {
+            const customLabel = document.getElementById('customLabel');
+            const customShares = document.getElementById('customShares');
+            if (splitSelect.value === 'custom') {
+                customLabel.style.display = 'block';
+                customShares.style.display = 'block';
+            } else {
+                customLabel.style.display = 'none';
+                customShares.style.display = 'none';
+            }
+        });
+    }
+
+    if (addMemberButton) {
+        addMemberButton.addEventListener('click', () => {
+            const memberInputs = document.getElementById('memberInputs');
+            const newMemberInput = document.createElement('div');
+            newMemberInput.className = 'member-input';
+            newMemberInput.innerHTML = `
+                <input type="text" class="member-name" placeholder="Member Name (e.g., Bob)">
+                <input type="text" class="member-address" placeholder="e.g., 0x742d...">
+                <button type="button" class="remove-member">Remove</button>
+            `;
+            memberInputs.appendChild(newMemberInput);
+            newMemberInput.querySelector('.remove-member').addEventListener('click', () => {
+                if (memberInputs.querySelectorAll('.member-input').length > 1) {
+                    newMemberInput.remove();
+                }
+            });
+        });
+    }
+
+    if (amountInput && currencySelect) {
+        amountInput.addEventListener('input', updateSHMAmount);
+        currencySelect.addEventListener('change', updateSHMAmount);
+    }
+
+    document.addEventListener('click', (e) => {
+        if (e.target.classList.contains('remove-member')) {
+            const memberInput = e.target.closest('.member-input');
+            if (document.querySelectorAll('#memberInputs .member-input').length > 1) {
+                memberInput.remove();
+            }
+        }
+    });
+}
+
+async function populateDashboard() {
+    const dashboardContent = document.getElementById('dashboardContent');
+    if (!dashboardContent) return;
+
+    dashboardContent.innerHTML = 'Loading groups...';
+    try {
+        const account = await getAccount();
+        if (!account) {
+            dashboardContent.innerHTML = 'Please connect MetaMask to view your groups.';
+            return;
+        }
+
+        const groupCount = parseInt(await getContract().methods.groupCount().call()) || 0;
+        const groups = [];
+        for (let i = 1; i <= groupCount; i++) {
+            try {
+                const group = await getContract().methods.getGroup(i).call();
+                const members = group[1] || [];
+                if (members.some(addr => addr.toLowerCase() === account.toLowerCase())) {
+                    const isSettled = await isGroupSettled(i);
+                    groups.push({ id: i, name: getGroupName(i), members, settled: isSettled });
+                }
+            } catch (error) {
+                console.error(`Error fetching group ${i}:`, error);
+            }
+        }
+
+        if (groups.length === 0) {
+            dashboardContent.innerHTML = 'No groups found. Create one in the Add Expense page.';
+            return;
+        }
+
+        const showSettled = localStorage.getItem('showSettled') === 'true';
+        dashboardContent.innerHTML = `
+            <button id="toggleSettledButton" class="toggle-settled-button">
+                ${showSettled ? 'Hide Settled Groups' : 'Show Settled Groups'}
+            </button>
+            <div id="groups"></div>
+        `;
+        const toggleSettledButton = document.getElementById('toggleSettledButton');
+        toggleSettledButton.addEventListener('click', () => {
+            localStorage.setItem('showSettled', !showSettled);
+            populateDashboard();
+        });
+
+        const groupsDiv = document.getElementById('groups');
+        groupsDiv.innerHTML = '';
+
+        for (const group of groups) {
+            if (!showSettled && group.settled) continue;
+
+            const expenses = [];
+            const expenseIds = await getContract().methods.getGroupExpenseIds(group.id).call();
+            for (const expenseId of expenseIds) {
+                const expense = await getContract().methods.getExpense(expenseId).call();
+                expenses.push({
+                    id: expense[0],
+                    description: expense[1],
+                    amount: web3.utils.fromWei(expense[2], 'ether'),
+                    payer: expense[3],
+                    splitType: expense[4],
+                    customShares: expense[5]
+                });
+            }
+
+            const balanceData = await getContract().methods.getGroupBalances(group.id).call();
+            const balMembers = balanceData[0] || [];
+            const balances = balanceData[1] || [];
+
+            const groupDiv = document.createElement('div');
+            groupDiv.className = `group ${group.settled ? 'settled-group' : ''}`;
+            const blockie = await createBlockie(group.id.toString(), 64, group.name[0]);
+            groupDiv.innerHTML = `
+                <div class="group-header">
+                    <img src="${blockie}" class="group-avatar" alt="Group Avatar">
+                    <h2>${group.name} (${group.id})
+                        <button class="edit-group-name-button">✏️</button>
+                    </h2>
+                </div>
+                <h3>Members</h3>
+                <div class="members-container"></div>
+                <h3>Expenses</h3>
+                <div class="expenses-container"></div>
+                <h3>Balances</h3>
+                <div class="balances-container"></div>
+                <h3>Settlement</h3>
+                <div class="settlement-container"></div>
+                <div class="history-toggle">Toggle Settlement History</div>
+                <div class="history-log"></div>
+                <h3>Contribution Breakdown</h3>
+                <table class="contribution-table">
+                    <tr>
+                        <th>Member</th>
+                        <th>Total Paid (SHM)</th>
+                        <th>Fair Share (SHM)</th>
+                        <th>Net Balance (SHM)</th>
+                    </tr>
+                </table>
+            `;
+
+            const membersContainer = groupDiv.querySelector('.members-container');
+            for (const member of group.members) {
+                const blockie = await createBlockie(member, 32, getMemberName(member)[0]);
+                const memberDiv = document.createElement('div');
+                memberDiv.className = 'member-item';
+                memberDiv.innerHTML = `
+                    <img src="${blockie}" class="member-avatar" alt="Member Avatar">
+                    <span class="member-name">${getMemberName(member)}</span>
+                    <button class="edit-name-button">✏️</button>
+                `;
+                memberDiv.querySelector('.edit-name-button').addEventListener('click', () => updateMemberName(member));
+                membersContainer.appendChild(memberDiv);
+            }
+
+            const expensesContainer = groupDiv.querySelector('.expenses-container');
+            for (const expense of expenses) {
+                const blockie = await createBlockie(expense.payer, 32, getMemberName(expense.payer)[0]);
+                const expenseDiv = document.createElement('div');
+                expenseDiv.className = 'expense-item';
+                expenseDiv.innerHTML = `
+                    <img src="${blockie}" class="expense-avatar" alt="Payer Avatar">
+                    <span>${expense.description}: ${parseFloat(expense.amount).toFixed(2)} SHM (Paid by ${getMemberName(expense.payer)}, ${expense.splitType} split)</span>
+                `;
+                expensesContainer.appendChild(expenseDiv);
+            }
+
+            const balancesContainer = groupDiv.querySelector('.balances-container');
+            for (let i = 0; i < balMembers.length; i++) {
+                const balance = parseFloat(web3.utils.fromWei(balances[i], 'ether')).toFixed(2);
+                const blockie = await createBlockie(balMembers[i], 32, getMemberName(balMembers[i])[0]);
+                const balanceDiv = document.createElement('div');
+                balanceDiv.className = `balance-item ${balance > 0 ? 'positive' : balance < 0 ? 'negative' : 'settled'}`;
+                balanceDiv.innerHTML = `
+                    <img src="${blockie}" class="balance-avatar" alt="Member Avatar">
+                    <span>${getMemberName(balMembers[i])}: ${balance} SHM</span>
+                `;
+                balancesContainer.appendChild(balanceDiv);
+            }
+
+            const settlementContainer = groupDiv.querySelector('.settlement-container');
+            for (const member of group.members) {
+                if (member.toLowerCase() === account.toLowerCase()) continue;
+                const debtAmount = await getDebtAmount(group.id, member);
+                if (parseFloat(debtAmount) <= 0) continue;
+                const blockie = await createBlockie(member, 32, getMemberName(member)[0]);
+                const settlementDiv = document.createElement('div');
+                settlementDiv.className = `settlement-line ${debtAmount > 0 ? 'positive' : 'settled'}`;
+                settlementDiv.innerHTML = `
+                    <img src="${blockie}" class="balance-avatar" alt="Member Avatar">
+                    <span>You owe ${getMemberName(member)} ${debtAmount} SHM</span>
+                    <button class="mark-paid-button" ${group.settled ? 'disabled' : ''}>Mark as Paid</button>
+                `;
+                settlementContainer.appendChild(settlementDiv);
+                if (!group.settled) {
+                    settlementDiv.querySelector('.mark-paid-button').addEventListener('click', async () => {
+                        try {
+                            const amountWei = web3.utils.toWei(debtAmount, 'ether');
+                            const tx = await getContract().methods.settleDebt(group.id, member, amountWei).send({
+                                from: account,
+                                value: '0',
+                                gasPrice: web3.utils.toWei('50', 'gwei')
+                            });
+                            console.log(`Debt settled: ${account} paid ${member} ${debtAmount} SHM in group ${group.id}`);
+                            populateDashboard();
+                        } catch (error) {
+                            console.error('Error settling debt:', error);
+                            alert('Error settling debt: ' + error.message);
+                        }
+                    });
+                }
+            }
+
+            const historyToggle = groupDiv.querySelector('.history-toggle');
+            const historyLog = groupDiv.querySelector('.history-log');
+            historyToggle.addEventListener('click', async () => {
+                if (historyLog.classList.contains('active')) {
+                    historyLog.classList.remove('active');
+                    historyLog.innerHTML = '';
+                    return;
+                }
+                const settlements = await fetchSettlementHistory(group.id);
+                historyLog.innerHTML = settlements.length === 0
+                    ? '<p>No settlement history available.</p>'
+                    : settlements.map(s => `
+                        <div class="history-item">
+                            ${getMemberName(s.from)} paid ${getMemberName(s.to)} ${s.amount} SHM on ${s.timestamp}
+                            <a href="https://explorer-unstable.shardeum.org/tx/${s.txHash}" target="_blank">View Tx</a>
+                        </div>
+                    `).join('');
+                historyLog.classList.add('active');
+            });
+
+            const contributionTable = groupDiv.querySelector('.contribution-table');
+            const breakdown = await calculateContributionBreakdown(group.id, group.members, expenses);
+            for (const entry of breakdown) {
+                const row = document.createElement('tr');
+                const netBalance = parseFloat(entry.netBalance).toFixed(2);
+                row.innerHTML = `
+                    <td>${entry.name}</td>
+                    <td>${parseFloat(entry.totalPaid).toFixed(2)}</td>
+                    <td>${parseFloat(entry.fairShare).toFixed(2)}</td>
+                    <td class="${netBalance > 0 ? 'positive' : netBalance < 0 ? 'negative' : 'settled'}">${netBalance}</td>
+                `;
+                contributionTable.appendChild(row);
+            }
+
+            groupDiv.querySelector('.edit-group-name-button').addEventListener('click', () => updateGroupName(group.id));
+            groupsDiv.appendChild(groupDiv);
+        }
+    } catch (error) {
+        console.error('Error populating dashboard:', error);
+        dashboardContent.innerHTML = 'Error loading groups: ' + error.message;
     }
 }
 
@@ -639,850 +1128,49 @@ async function calculateContributionBreakdown(groupId, members, expenses) {
         breakdown.forEach(b => {
             const balIndex = balMembers.findIndex(addr => addr.toLowerCase() === b.address.toLowerCase());
             if (balIndex !== -1) {
-                b.netBalance = parseFloat(web3.utils.fromWei(balances[balIndex] || '0', 'ether'));
+                b.netBalance = parseFloat(web3.utils.fromWei(balances[balIndex], 'ether'));
             }
-            b.totalPaid = parseFloat(b.totalPaid.toFixed(2));
-            b.fairShare = parseFloat(b.fairShare.toFixed(2));
-            b.netBalance = parseFloat(b.netBalance.toFixed(2));
         });
 
         return breakdown;
     } catch (error) {
         console.error(`Error calculating contribution breakdown for group ${groupId}:`, error);
-        return members.map(member => ({
-            address: member,
-            name: getMemberName(member),
-            totalPaid: 0,
-            fairShare: 0,
-            netBalance: 0
-        }));
-    }
-}
-
-async function getSettlementLines(groupId, members, balances) {
-    try {
-        const userAddress = await getAccount();
-        console.log(`Calculating settlements for group ${groupId}, members:`, members, 'balances:', balances);
-        const lines = [];
-        for (let i = 0; i < members.length; i++) {
-            const from = members[i].toLowerCase();
-            const balance = parseFloat(web3.utils.fromWei(balances[i] || '0', 'ether'));
-            if (balance <= 0) continue;
-            for (let j = 0; j < members.length; j++) {
-                if (i === j) continue;
-                const to = members[j].toLowerCase();
-                const toBalance = parseFloat(web3.utils.fromWei(balances[j] || '0', 'ether'));
-                if (toBalance >= 0) continue;
-                const debt = Math.min(balance, Math.abs(toBalance));
-                if (debt > 0.01) {
-                    lines.push({
-                        from: members[i],
-                        to: members[j],
-                        amount: debt.toFixed(2),
-                        fromName: getMemberName(members[i]),
-                        toName: getMemberName(members[j]),
-                        fromAddr: members[i],
-                        toAddr: members[j]
-                    });
-                    console.log(`Settlement line: ${getMemberName(members[i])} (${members[i]}) owes ${getMemberName(members[j])} (${members[j]}) ${debt.toFixed(2)} SHM`);
-                }
-            }
-        }
-        console.log(`Settlement lines for group ${groupId}:`, lines);
-        return lines;
-    } catch (error) {
-        console.error(`Error calculating settlement lines for group ${groupId}:`, error);
         return [];
     }
 }
 
-async function populateDashboard() {
-    const dashboardContent = document.getElementById('dashboardContent');
-    if (!dashboardContent) {
-        console.error('dashboardContent element not found');
-        return;
-    }
-    dashboardContent.innerHTML = '<p>Loading groups...</p>';
-    if (!web3 || !getContract() || !getAccount()) {
-        dashboardContent.innerHTML = '<p>Please connect MetaMask to view your groups.</p>';
-        return;
-    }
+async getDebtAmount(groupId, toAddress) {
     try {
         const userAddress = await getAccount();
-        console.log('Fetching groups for dashboard, user:', userAddress);
-        const groupCount = parseInt(await getContract().methods.groupCount().call()) || 0;
-        console.log('Total group count from contract:', groupCount);
-        const groupIds = new Set();
-        for (let i = 0; i < Math.min(groupCount, 50); i++) {
-            try {
-                const groupId = await getContract().methods.userGroups(userAddress, i).call();
-                if (groupId && parseInt(groupId) > 0) {
-                    groupIds.add(groupId.toString());
-                    console.log(`Added groupId ${groupId} at index ${i} from userGroups`);
-                }
-            } catch (error) {
-                console.log(`userGroups[${i}] reverted or empty, skipping`);
-                if (error.message.includes('execution reverted')) {
-                    break;
-                }
-            }
+        const balanceData = await getContract().methods.getGroupBalances(groupId).call();
+        const balMembers = balanceData[0] || [];
+        const balances = balanceData[1] || [];
+        const userIndex = balMembers.findIndex(addr => addr.toLowerCase() === userAddress.toLowerCase());
+        const toIndex = balMembers.findIndex(addr => addr.toLowerCase() === toAddress.toLowerCase());
+        if (userIndex === -1 || toIndex === -1) {
+            console.log(`User ${userAddress} or recipient ${toAddress} not found in group ${groupId}`);
+            return '0';
         }
-        console.log('Running enhanced fallback scan for all groups...');
-        for (let i = 1; i <= groupCount; i++) {
-            try {
-                const result = await getContract().methods.getGroup(i).call();
-                const members = result[1] || [];
-                if (members && Array.isArray(members) && members.map(addr => addr.toLowerCase()).includes(userAddress.toLowerCase())) {
-                    groupIds.add(i.toString());
-                    console.log(`Added groupId ${i} from fallback scan (user is member)`);
-                }
-            } catch (error) {
-                console.log(`Group ${i} does not exist or access denied`);
-            }
+        const userBalance = parseFloat(web3.utils.fromWei(balances[userIndex] || '0', 'ether'));
+        const toBalance = parseFloat(web3.utils.fromWei(balances[toIndex] || '0', 'ether'));
+        if (userBalance <= 0) {
+            console.log(`User ${userAddress} has non-positive balance (${userBalance} SHM) in group ${groupId}`);
+            return '0';
         }
-        console.log('Final group IDs found:', Array.from(groupIds));
-        if (groupIds.size === 0) {
-            dashboardContent.innerHTML = '<p>No groups found for this account. Create one in the Add Expense page or verify your MetaMask account.</p>';
-            return;
+        if (toBalance >= 0) {
+            console.log(`Recipient ${toAddress} has non-negative balance (${toBalance} SHM) in group ${groupId}`);
+            return '0';
         }
-        const showSettledGroups = JSON.parse(localStorage.getItem('showSettledGroups') || 'false');
-        const toggleButton = document.createElement('button');
-        toggleButton.className = 'toggle-settled-button';
-        toggleButton.textContent = showSettledGroups ? 'Hide Settled Groups' : 'Show Settled Groups';
-        toggleButton.onclick = () => {
-            const newState = !showSettledGroups;
-            localStorage.setItem('showSettledGroups', JSON.stringify(newState));
-            populateDashboard();
-        };
-        dashboardContent.innerHTML = '';
-        dashboardContent.appendChild(toggleButton);
-        for (let groupId of groupIds) {
-            try {
-                const result = await getContract().methods.getGroup(groupId).call();
-                const onChainName = result[0] || 'Unnamed Group';
-                const groupName = getGroupName(groupId);
-                const members = result[1] || [];
-                if (!members || !Array.isArray(members)) {
-                    console.warn(`Group ${groupId} has invalid members array:`, members);
-                    continue;
-                }
-                const isSettled = await isGroupSettled(groupId);
-                const groupBlockie = await createBlockie(groupId.toString(), 64);
-                const memberAvatars = await Promise.all(
-                    members.map(async addr => {
-                        const initial = getMemberName(addr)[0].toUpperCase();
-                        return {
-                            addr,
-                            name: getMemberName(addr),
-                            avatar: await createBlockie(addr, 32, initial)
-                        };
-                    })
-                );
-                const balanceData = await getContract().methods.getGroupBalances(groupId).call();
-                const balMembers = balanceData[0] || [];
-                const balances = balanceData[1] || [];
-                const balanceAvatars = await Promise.all(
-                    balMembers.map(async addr => ({
-                        addr,
-                        name: getMemberName(addr),
-                        avatar: await createBlockie(addr, 32, getMemberName(addr)[0].toUpperCase())
-                    }))
-                );
-                const expenseIds = await getContract().methods.getGroupExpenseIds(groupId).call();
-                console.log(`Group ${groupId} expense IDs:`, expenseIds);
-                const groupExpenses = await Promise.all(
-                    expenseIds.map(async expenseId => {
-                        try {
-                            const expense = await getContract().methods.getExpense(expenseId).call();
-                            const block = await web3.eth.getBlock('latest');
-                            return {
-                                id: expenseId,
-                                description: expense[1] || 'No description',
-                                amount: web3.utils.fromWei(expense[2] || '0', 'ether'),
-                                payer: expense[3] || 'Unknown',
-                                splitType: expense[4] || 'Unknown',
-                                customShares: expense[5] || [],
-                                timestamp: block ? new Date(block.timestamp * 1000).toLocaleString() : 'N/A'
-                            };
-                        } catch (error) {
-                            console.error(`Error fetching expense ${expenseId} for group ${groupId}:`, error);
-                            return null;
-                        }
-                    })
-                ).then(results => results.filter(exp => exp !== null));
-                const contributionBreakdown = await calculateContributionBreakdown(groupId, members, groupExpenses);
-                const settlementLines = isSettled ? [] : await getSettlementLines(groupId, balMembers, balances);
-                const settlementHistory = await fetchSettlementHistory(groupId);
-                const groupDiv = document.createElement('details');
-                groupDiv.className = `group ${isSettled ? 'settled-group' : ''}`;
-                if (isSettled && !showSettledGroups) {
-                    groupDiv.setAttribute('hidden', 'true');
-                }
-                groupDiv.innerHTML = `
-                    <summary>
-                        <img src="${groupBlockie}" alt="Group ${groupId} Avatar" class="group-avatar">
-                        <h3 style="display: inline;">${groupName} (ID: ${groupId})${isSettled ? ' [Settled]' : ''}</h3>
-                        <button class="edit-group-name-button" data-group-id="${groupId}" title="Edit Group Name">✏️</button>
-                    </summary>
-                    <div class="group-content">
-                        <p><strong>Members:</strong></p>
-                        <div class="members-container">
-                            ${memberAvatars.map(({ name, avatar, addr }) => `
-                                <span class="member-item">
-                                    <img src="${avatar}" class="member-avatar" alt="${name} Avatar">
-                                    <span class="member-name">${name} (${addr.slice(0, 7)})</span>
-                                    <button class="edit-name-button" data-address="${addr}" title="Edit Name">✏️</button>
-                                </span>
-                            `).join('')}
-                        </div>
-                        <h4>Expenses:</h4>
-                        <div class="expenses-placeholder">Loading expenses...</div>
-                        <h4>Who Owes Whom:</h4>
-                        <div class="settlement-container">
-                            ${settlementLines.length > 0 ? settlementLines.map(line => `
-                                <div class="settlement-line ${line.fromAddr.toLowerCase() === userAddress.toLowerCase() ? 'negative' : 'positive'}" data-from="${line.fromAddr}" data-to="${line.toAddr}" data-amount="${line.amount}">
-                                    <span class="settlement-icon">${line.fromAddr.toLowerCase() === userAddress.toLowerCase() ? '↓' : '↑'}</span>
-                                    <span>${line.fromName} (${line.fromAddr.slice(0, 7)}) → ${line.toName} (${line.toAddr.slice(0, 7)}): ${line.amount} SHM</span>
-                                    ${line.fromAddr.toLowerCase() === userAddress.toLowerCase() ? `<button class="settle-now-button" data-group-id="${groupId}" data-to="${line.toAddr}" data-amount="${line.amount}">Settle Now</button>` : ''}
-                                </div>
-                            `).join('') : '<p>No settlements needed.</p>'}
-                        </div>
-                        <h4>Settlement History:</h4>
-                        <div class="settlement-history">
-                            ${settlementHistory.length > 0 ? settlementHistory.map(settlement => `
-                                <div class="settlement-history-item">
-                                    <span>${getMemberName(settlement.from)} (${settlement.from.slice(0, 7)}) paid ${getMemberName(settlement.to)} (${settlement.to.slice(0, 7)}): ${settlement.amount} SHM</span>
-                                    <span>Tx: <a href="https://explorer-unstable.shardeum.org/tx/${settlement.txHash}" target="_blank">${settlement.txHash.slice(0, 6)}...${settlement.txHash.slice(-4)}</a></span>
-                                    <span>Date: ${settlement.timestamp}</span>
-                                </div>
-                            `).join('') : '<p>No settlement history.</p>'}
-                        </div>
-                        <h4>Contribution Breakdown:</h4>
-                        <table class="contribution-table">
-                            <thead>
-                                <tr>
-                                    <th>Member</th>
-                                    <th>Total Paid (SHM)</th>
-                                    <th>Fair Share (SHM)</th>
-                                    <th>Net Balance (SHM)</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${contributionBreakdown.map(b => `
-                                    <tr>
-                                        <td>
-                                            <img src="${balanceAvatars.find(ba => ba.addr.toLowerCase() === b.address.toLowerCase())?.avatar || createBlockie(b.address, 32, b.name[0].toUpperCase())}" class="balance-avatar" alt="${b.name} Avatar">
-                                            ${b.name} (${b.address.slice(0, 7)})
-                                        </td>
-                                        <td>${b.totalPaid.toFixed(2)}</td>
-                                        <td>${b.fairShare.toFixed(2)}</td>
-                                        <td class="${b.netBalance > 0 ? 'positive' : b.netBalance < 0 ? 'negative' : 'settled'}">
-                                            <span class="settlement-icon">${b.netBalance > 0 ? '↑' : b.netBalance < 0 ? '↓' : ''}</span>
-                                            ${b.netBalance.toFixed(2)}
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td colspan="4">
-                                            <div class="progress-container">
-                                                <div class="progress-bar" style="width: ${(b.totalPaid / (b.fairShare || 1)) * 100}%"></div>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                        <h4>Settle Debt</h4>
-                        <form id="settleDebtForm-${groupId}" class="settle-debt-form">
-                            <input type="hidden" name="groupId" value="${groupId}">
-                            <label for="settleTo-${groupId}">Pay To:</label>
-                            <select id="settleTo-${groupId}" required>
-                                <option value="" disabled selected>Select a member</option>
-                                ${members
-                                    .filter(addr => addr.toLowerCase() !== userAddress.toLowerCase())
-                                    .map(addr => `<option value="${addr}">${getMemberName(addr)}</option>`)
-                                    .join('')}
-                            </select>
-                            <label for="settleAmount-${groupId}">Amount (SHM):</label>
-                            <input type="number" id="settleAmount-${groupId}" placeholder="Select a member to calculate" step="0.01" required>
-                            <button type="submit" class="submit-group">Settle Debt</button>
-                        </form>
-                        <p id="settleMessage-${groupId}"></p>
-                    </div>
-                `;
-                dashboardContent.appendChild(groupDiv);
-                const expenseAvatars = await Promise.all(
-                    groupExpenses.map(async exp => ({
-                        ...exp,
-                        avatar: await createBlockie(exp.payer, 32, getMemberName(exp.payer)[0].toUpperCase())
-                    }))
-                );
-                const expenseElements = expenseAvatars.map(exp => `
-                    <div class="expense-item">
-                        <img src="${exp.avatar}" class="expense-avatar" alt="${getMemberName(exp.payer)} Avatar">
-                        <span class="member-name">Expense ${exp.id}: ${exp.description} - ${exp.amount} SHM (Payer: ${getMemberName(exp.payer)} (${exp.payer.slice(0, 7)}), Split: ${exp.splitType}, Date: ${exp.timestamp})</span>
-                    </div>
-                `);
-                const expensesHTML = expenseElements.length > 0 ? expenseElements.join('') : '<p>No expenses found.</p>';
-                groupDiv.querySelector('.expenses-placeholder').outerHTML = expensesHTML;
-                const settleForm = document.getElementById(`settleDebtForm-${groupId}`);
-                const settleToSelect = document.getElementById(`settleTo-${groupId}`);
-                const settleAmountInput = document.getElementById(`settleAmount-${groupId}`);
-                settleToSelect.addEventListener('change', async () => {
-                    const toAddress = settleToSelect.value;
-                    if (toAddress) {
-                        const debtAmount = await getDebtAmount(groupId, toAddress);
-                        settleAmountInput.value = debtAmount !== '0' ? parseFloat(debtAmount).toFixed(2) : '';
-                        settleAmountInput.placeholder = debtAmount !== '0' ? `Owe ${parseFloat(debtAmount).toFixed(2)} SHM` : 'No debt to settle';
-                    } else {
-                        settleAmountInput.value = '';
-                        settleAmountInput.placeholder = 'Select a member to calculate';
-                    }
-                });
-                settleForm.addEventListener('submit', async function(e) {
-                    e.preventDefault();
-                    if (!web3 || !getContract() || !getAccount()) {
-                        alert('Please connect MetaMask first.');
-                        return;
-                    }
-                    const settleGroupId = groupId;
-                    const toAddress = document.getElementById(`settleTo-${groupId}`)?.value;
-                    const amountInput = document.getElementById(`settleAmount-${groupId}`)?.value;
-                    const settleMessage = document.getElementById(`settleMessage-${groupId}`);
-                    let amount;
-                    try {
-                        amount = web3.utils.toWei(amountInput, 'ether');
-                    } catch (error) {
-                        settleMessage.textContent = 'Invalid amount format. Please enter a valid number.';
-                        return;
-                    }
-                    try {
-                        const tx = await getContract().methods.settleDebt(settleGroupId, toAddress, amount).send({
-                            from: await getAccount(),
-                            value: '0',
-                            gasPrice: web3.utils.toWei('50', 'gwei')
-                        });
-                        settleMessage.textContent = 'Debt settled! Transaction: https://explorer-unstable.shardeum.org/tx/' + tx.transactionHash;
-                        this.reset();
-                        await populateDashboard();
-                    } catch (error) {
-                        console.error(`Debt settlement error for group ${settleGroupId}:`, error);
-                        settleMessage.textContent = 'Error: ' + (error.message.includes('revert') ? 'Invalid input or group is settled. Check inputs and try again.' : error.message);
-                    }
-                });
-                const editNameButtons = groupDiv.querySelectorAll('.edit-name-button');
-                editNameButtons.forEach(button => {
-                    button.addEventListener('click', () => {
-                        const address = button.dataset.address;
-                        updateMemberName(address);
-                    });
-                });
-                const editGroupNameButton = groupDiv.querySelector('.edit-group-name-button');
-                editGroupNameButton.addEventListener('click', () => {
-                    updateGroupName(groupId);
-                });
-                const settleNowButtons = groupDiv.querySelectorAll('.settle-now-button');
-                settleNowButtons.forEach(button => {
-                    button.addEventListener('click', async () => {
-                        if (!web3 || !getContract() || !getAccount()) {
-                            alert('Please connect MetaMask first.');
-                            return;
-                        }
-                        const settleGroupId = button.dataset.groupId;
-                        const toAddress = button.dataset.to;
-                        const amountInput = button.dataset.amount;
-                        const settleMessage = document.getElementById(`settleMessage-${settleGroupId}`);
-                        let amount;
-                        try {
-                            amount = web3.utils.toWei(amountInput, 'ether');
-                        } catch (error) {
-                            settleMessage.textContent = 'Invalid amount format.';
-                            return;
-                        }
-                        try {
-                            const tx = await getContract().methods.settleDebt(settleGroupId, toAddress, amount).send({
-                                from: await getAccount(),
-                                value: '0',
-                                gasPrice: web3.utils.toWei('50', 'gwei')
-                            });
-                            settleMessage.textContent = 'Debt settled! Transaction: https://explorer-unstable.shardeum.org/tx/' + tx.transactionHash;
-                            await populateDashboard();
-                        } catch (error) {
-                            console.error(`Debt settlement error for group ${settleGroupId}:`, error);
-                            settleMessage.textContent = 'Error: ' + (error.message.includes('revert') ? 'Invalid input or group is settled.' : error.message);
-                        }
-                    });
-                });
-            } catch (error) {
-                console.error(`Error processing group ${groupId}:`, error);
-            }
-        }
+        const debtAmount = Math.min(userBalance, Math.abs(toBalance));
+        console.log(`Calculated debt for group ${groupId}: ${userAddress} owes ${toAddress} ${debtAmount} SHM`);
+        return debtAmount.toFixed(2);
     } catch (error) {
-        console.error('Error populating dashboard:', error);
-        dashboardContent.innerHTML = '<p>Error loading groups: ' + error.message + '. Please check your MetaMask connection and try again.</p>';
+        console.error(`Error calculating debt for group ${groupId}, to ${toAddress}:`, error);
+        return '0';
     }
 }
 
-async function fetchShmPrice() {
-    const cacheKeyPrefix = 'shmPriceCache_';
-    const cacheTimestampKeyPrefix = 'shmPriceTimestamp_';
-    const cacheDuration = 10 * 60 * 1000;
-    const now = Date.now();
-    const currencies = ['usd', 'eur', 'inr', 'shm'];
-    shmPrice = shmPrice || {};
-
-    for (const currency of currencies) {
-        const cacheKey = cacheKeyPrefix + currency;
-        const cacheTimestampKey = cacheTimestampKeyPrefix + currency;
-        const cachedData = localStorage.getItem(cacheKey);
-        const cachedTimestamp = localStorage.getItem(cacheTimestampKey);
-
-        if (cachedData && cachedTimestamp && (now - parseInt(cachedTimestamp)) < cacheDuration) {
-            console.log(`Using cached SHM price for ${currency}:`, JSON.parse(cachedData));
-            shmPrice[currency] = JSON.parse(cachedData);
-            continue;
-        }
-
-        try {
-            if (currency === 'shm') {
-                shmPrice[currency] = 1;
-                console.log(`Set SHM price for ${currency}:`, 1);
-            } else {
-                console.log(`Fetching SHM price for ${currency} from CoinGecko`);
-                const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=shardeum&vs_currencies=' + currency);
-                if (!response.ok) {
-                    throw new Error('HTTP ' + response.status + ': ' + response.statusText);
-                }
-                const data = await response.json();
-                const price = data.shardeum?.[currency];
-                if (price === undefined) {
-                    throw new Error('SHM price not found in response');
-                }
-                shmPrice[currency] = price;
-                console.log(`Fetched SHM price for ${currency}:`, price);
-            }
-            localStorage.setItem(cacheKey, JSON.stringify(shmPrice[currency]));
-            localStorage.setItem(cacheTimestampKey, now.toString());
-        } catch (error) {
-            console.error(`Error fetching SHM price for ${currency}:`, error);
-            shmPrice[currency] = currency === 'shm' ? 1 : (currency === 'usd' ? 0.11 : currency === 'eur' ? 0.1 : 9.0);
-            localStorage.setItem(cacheKey, JSON.stringify(shmPrice[currency]));
-            localStorage.setItem(cacheTimestampKey, now.toString());
-            console.log(`Using fallback SHM price for ${currency}:`, shmPrice[currency]);
-        }
-    }
-
-    const shmAmountElement = document.getElementById('shmAmount');
-    if (shmAmountElement) {
-        if (Object.keys(shmPrice).length > 0) {
-            shmAmountElement.textContent = 'SHM Amount: Ready (fetched prices)';
-            let refreshBtn = document.getElementById('refreshPriceBtn');
-            if (!refreshBtn) {
-                refreshBtn = document.createElement('button');
-                refreshBtn.id = 'refreshPriceBtn';
-                refreshBtn.textContent = '↻';
-                refreshBtn.type = 'button';
-                refreshBtn.style.marginLeft = '5px';
-                refreshBtn.style.padding = '2px 6px';
-                refreshBtn.style.fontSize = '12px';
-                refreshBtn.style.backgroundColor = '#007bff';
-                refreshBtn.style.color = 'white';
-                refreshBtn.style.border = 'none';
-                refreshBtn.style.borderRadius = '3px';
-                refreshBtn.style.cursor = 'pointer';
-                refreshBtn.style.verticalAlign = 'middle';
-                refreshBtn.title = 'Refresh SHM Price';
-                refreshBtn.onclick = fetchShmPrice;
-                shmAmountElement.insertAdjacentElement('afterend', refreshBtn);
-            }
-        } else {
-            shmAmountElement.textContent = 'Error fetching SHM price. Using defaults. Check console.';
-        }
-    }
-    updateShmAmount();
-}
-
-function updateShmAmount() {
-    const amountInput = document.getElementById('amount');
-    const currency = document.getElementById('currency');
-    const shmAmountElement = document.getElementById('shmAmount');
-    if (!shmAmountElement || !amountInput || !currency) return;
-    if (!shmPrice || !amountInput.value) {
-        shmAmountElement.textContent = 'SHM Amount: Enter amount to calculate';
-        return;
-    }
-    const amount = parseFloat(amountInput.value);
-    if (isNaN(amount) || amount <= 0) {
-        shmAmountElement.textContent = 'SHM Amount: Enter a valid amount';
-        return;
-    }
-    const selectedCurrency = currency.value.toLowerCase();
-    let shmAmount;
-    if (selectedCurrency === 'shm') {
-        shmAmount = amount;
-    } else {
-        const price = shmPrice[selectedCurrency];
-        if (price === undefined || price <= 0) {
-            console.error('Invalid SHM price for currency:', selectedCurrency);
-            shmAmountElement.textContent = 'Error: Invalid price data. Refresh price.';
-            return;
-        }
-        shmAmount = amount / price;
-    }
-    shmAmountElement.textContent = 'SHM Amount: ' + shmAmount.toFixed(4) + ' SHM';
-    console.log(`Calculated SHM: ${amount} ${selectedCurrency.toUpperCase()} = ${shmAmount.toFixed(4)} SHM (price: ${shmPrice[selectedCurrency]})`);
-}
-
-async function populateGroupDropdown() {
-    const groupSelect = document.getElementById('groupId');
-    const groupCreationDiv = document.getElementById('groupCreation');
-    const submitButton = document.getElementById('submitButton');
-    const expenseMessage = document.getElementById('expenseMessage');
-    if (!groupSelect || !groupCreationDiv || !submitButton || !expenseMessage) {
-        console.error('Required elements not found');
-        return;
-    }
-    groupSelect.innerHTML = '<option value="" disabled selected>Loading groups...</option>';
-    if (!web3 || !getContract() || !getAccount()) {
-        console.error('Web3.js, contract, or account not initialized');
-        groupSelect.innerHTML = '<option value="" disabled selected>Connect wallet first</option>';
-        groupCreationDiv.style.display = 'none';
-        submitButton.textContent = 'Add Expense';
-        expenseMessage.textContent = 'Please connect MetaMask to load groups.';
-        return;
-    }
-    try {
-        const userAddress = await getAccount();
-        console.log('Fetching groups for:', userAddress);
-        document.getElementById('userAddress').value = userAddress;
-        const groupCount = parseInt(await getContract().methods.groupCount().call()) || 0;
-        console.log('Total group count from contract:', groupCount);
-        const groupIds = new Set();
-        for (let i = 0; i < Math.min(groupCount, 50); i++) {
-            try {
-                const groupId = await getContract().methods.userGroups(userAddress, i).call();
-                if (groupId && parseInt(groupId) > 0) {
-                    groupIds.add(groupId.toString());
-                    console.log(`Added groupId ${groupId} at index ${i} from userGroups`);
-                }
-            } catch (error) {
-                console.log(`userGroups[${i}] reverted or empty, skipping`);
-                if (error.message.includes('execution reverted')) {
-                    break;
-                }
-            }
-        }
-        console.log('Running enhanced fallback scan for all groups...');
-        for (let i = 1; i <= groupCount; i++) {
-            try {
-                const result = await getContract().methods.getGroup(i).call();
-                const members = result[1] || [];
-                if (members && Array.isArray(members) && members.map(addr => addr.toLowerCase()).includes(userAddress.toLowerCase())) {
-                    groupIds.add(i.toString());
-                    console.log(`Added groupId ${i} from fallback scan (user is member)`);
-                }
-            } catch (error) {
-                console.log(`Group ${i} does not exist or access denied`);
-            }
-        }
-        console.log('Final group IDs found:', Array.from(groupIds));
-        groupSelect.innerHTML = '<option value="" disabled selected>Select a group</option>';
-        if (groupIds.size === 0) {
-            groupSelect.innerHTML += '<option value="create">Create a new group</option>';
-            groupCreationDiv.style.display = 'block';
-            submitButton.textContent = 'Create Group';
-            expenseMessage.textContent = 'No groups found for this account. Create one to add expenses or verify your MetaMask account.';
-        } else {
-            groupCreationDiv.style.display = 'none';
-            submitButton.textContent = 'Add Expense';
-            expenseMessage.textContent = '';
-            for (let groupId of groupIds) {
-                try {
-                    const result = await getContract().methods.getGroup(groupId).call();
-                    const onChainName = result[0] || 'Unnamed Group';
-                    const displayName = getGroupName(groupId);
-                    const isSettled = await isGroupSettled(groupId);
-                    const option = document.createElement('option');
-                    option.value = groupId;
-                    option.textContent = `${displayName} (ID: ${groupId})${isSettled ? ' [Settled]' : ''}`;
-                    if (isSettled) {
-                        option.disabled = true;
-                    }
-                    groupSelect.appendChild(option);
-                } catch (error) {
-                    console.error(`Error fetching group ${groupId}:`, error);
-                }
-            }
-            const createOption = document.createElement('option');
-            createOption.value = 'create';
-            createOption.textContent = 'Create a new group';
-            groupSelect.appendChild(createOption);
-        }
-    } catch (error) {
-        console.error('Error fetching groups:', error);
-        groupSelect.innerHTML = '<option value="" disabled selected>Error loading groups</option><option value="create">Create a new group</option>';
-        groupCreationDiv.style.display = 'block';
-        submitButton.textContent = 'Create Group';
-        expenseMessage.textContent = 'Error loading groups: ' + error.message + '. Please check your MetaMask connection and try again.';
-    }
-}
-
-function toggleCustomShares() {
-    const splitSelect = document.getElementById('split');
-    const customInput = document.getElementById('customShares');
-    const customLabel = document.getElementById('customLabel');
-    if (!splitSelect || !customInput || !customLabel) return;
-    const show = splitSelect.value === 'custom';
-    customInput.style.display = show ? 'block' : 'none';
-    customLabel.style.display = show ? 'block' : 'none';
-}
-
-function toggleGroupCreation() {
-    const groupSelect = document.getElementById('groupId');
-    const groupCreationDiv = document.getElementById('groupCreation');
-    const submitButton = document.getElementById('submitButton');
-    if (!groupSelect || !groupCreationDiv || !submitButton) return;
-    groupCreationDiv.style.display = groupSelect.value === 'create' ? 'block' : 'none';
-    submitButton.textContent = groupSelect.value === 'create' ? 'Create Group' : 'Add Expense';
-}
-
-function addMemberField() {
-    const memberInputs = document.getElementById('memberInputs');
-    if (!memberInputs) return;
-    const memberCount = memberInputs.children.length;
-    if (memberCount >= 10) {
-        alert('Maximum 10 members allowed per group.');
-        return;
-    }
-    const div = document.createElement('div');
-    div.className = 'member-input';
-    div.innerHTML = `
-        <input type="text" class="member-name" placeholder="Member Name (e.g., Bob)">
-        <input type="text" class="member-address" placeholder="e.g., 0x742d...">
-        <button type="button" class="remove-member">Remove</button>
-    `;
-    memberInputs.appendChild(div);
-    updateRemoveButtons();
-    const newRemoveButton = div.querySelector('.remove-member');
-    if (newRemoveButton) {
-        newRemoveButton.addEventListener('click', () => removeMember(newRemoveButton));
-    }
-}
-
-function removeMember(button) {
-    const memberInputs = document.getElementById('memberInputs');
-    if (!memberInputs) return;
-    if (memberInputs.children.length > 2) {
-        button.parentElement.remove();
-        updateRemoveButtons();
-    } else {
-        alert('At least one additional member is required besides your address.');
-    }
-}
-
-function updateRemoveButtons() {
-    const memberInputs = document.getElementById('memberInputs');
-    if (!memberInputs) return;
-    const removeButtons = document.getElementsByClassName('remove-member');
-    for (let btn of removeButtons) {
-        btn.style.display = memberInputs.children.length > 2 ? 'inline-block' : 'none';
-    }
-}
-
-async function handleExpenseFormSubmit(e) {
-    e.preventDefault();
-    console.log('Expense form submitted');
-    const expenseMessage = document.getElementById('expenseMessage');
-    if (!web3 || !getContract() || !getAccount()) {
-        console.error('Web3 not initialized or wallet not connected');
-        expenseMessage.textContent = 'Please connect MetaMask first.';
-        return;
-    }
-    const groupId = document.getElementById('groupId')?.value;
-    const submitButton = document.getElementById('submitButton');
-    const groupCreationDiv = document.getElementById('groupCreation');
-    if (!expenseMessage || !submitButton || !groupCreationDiv) {
-        console.error('Required form elements not found');
-        expenseMessage.textContent = 'Form elements missing. Please refresh the page.';
-        return;
-    }
-    if (groupId === 'create') {
-        console.log('Creating new group');
-        const groupName = document.getElementById('groupName')?.value;
-        const memberInputs = document.getElementsByClassName('member-input');
-        if (!groupName) {
-            expenseMessage.textContent = 'Please enter a group name.';
-            console.error('Group name missing');
-            return;
-        }
-        const members = [];
-        const newMemberNames = {};
-        const newGroupNames = JSON.parse(localStorage.getItem('groupNames') || '{}');
-        try {
-            const userAddress = (await getAccount()).toLowerCase();
-            for (let input of Array.from(memberInputs)) {
-                const addressInput = input.querySelector('.member-address');
-                const nameInput = input.querySelector('.member-name');
-                const address = addressInput?.value?.trim().toLowerCase() || '';
-                const name = nameInput?.value?.trim() || '';
-                if (address && (web3.utils.isAddress(address) || address === userAddress)) {
-                    members.push(address);
-                    if (name && name !== 'Me') newMemberNames[address] = name;
-                }
-            }
-            if (members.length < 2) {
-                expenseMessage.textContent = 'Please include at least two valid Ethereum addresses (including yours).';
-                console.error('Insufficient valid members:', members);
-                return;
-            }
-            if (!members.includes(userAddress)) {
-                expenseMessage.textContent = 'Your address is missing from the member list.';
-                console.error('User address missing from members:', members);
-                return;
-            }
-            const existingNames = JSON.parse(localStorage.getItem('memberNames') || '{}');
-            localStorage.setItem('memberNames', JSON.stringify({ ...existingNames, ...newMemberNames }));
-            const tx = await getContract().methods.createGroup(groupName, members).send({
-                from: await getAccount(),
-                value: '0',
-                gasPrice: web3.utils.toWei('50', 'gwei')
-            });
-            const newGroupId = parseInt(await getContract().methods.groupCount().call());
-            newGroupNames[newGroupId] = groupName;
-            localStorage.setItem('groupNames', JSON.stringify(newGroupNames));
-            expenseMessage.innerHTML = '<strong>Group created successfully!</strong> <a href="https://explorer-unstable.shardeum.org/tx/' + tx.transactionHash + '" target="_blank">View Tx</a>';
-            console.log('Group created, tx:', tx.transactionHash);
-            setTimeout(function() {
-                groupCreationDiv.style.display = 'none';
-                submitButton.textContent = 'Add Expense';
-                e.target.reset();
-                populateGroupDropdown();
-                document.getElementById('groupId').value = newGroupId;
-            }, 3000);
-        } catch (error) {
-            console.error('Group creation error:', error);
-            expenseMessage.textContent = 'Error: ' + (error.message.includes('revert') ? 'Invalid input or contract revert. Check addresses and try again.' : error.message);
-        }
-        return;
-    }
-    if (!groupId) {
-        expenseMessage.textContent = 'Please select a group.';
-        console.error('No group selected');
-        return;
-    }
-    const isSettled = await isGroupSettled(groupId);
-    if (isSettled) {
-        expenseMessage.textContent = 'This group is fully settled and cannot accept new expenses.';
-        return;
-    }
-    const description = document.getElementById('description')?.value;
-    const amountInput = document.getElementById('amount')?.value;
-    const currency = document.getElementById('currency')?.value;
-    let amount;
-    try {
-        const shmAmount = currency.toLowerCase() === 'shm' ? parseFloat(amountInput) : parseFloat(amountInput) / shmPrice[currency.toLowerCase()];
-        amount = web3.utils.toWei(shmAmount.toFixed(18), 'ether');
-        console.log('Converted amount:', amountInput, currency, 'to', shmAmount, 'SHM');
-    } catch (error) {
-        console.error('Error converting amount:', error);
-        expenseMessage.textContent = 'Invalid amount format or SHM price not loaded. Please try again.';
-        return;
-    }
-    const splitType = document.getElementById('split')?.value;
-    let customShares = [];
-    if (splitType === 'custom') {
-        try {
-            customShares = document.getElementById('customShares')?.value.split(',').map(s => parseInt(s.trim()));
-            const total = customShares.reduce((sum, val) => sum + val, 0);
-            if (total !== 100) {
-                expenseMessage.textContent = 'Custom shares must sum to 100%.';
-                console.error('Custom shares sum invalid:', total);
-                return;
-            }
-            const [_, members] = await getContract().methods.getGroup(groupId).call();
-            if (customShares.length !== members.length) {
-                expenseMessage.textContent = 'Custom shares count (' + customShares.length + ') must match group members (' + members.length + ').';
-                console.error('Custom shares count mismatch:', customShares.length, 'vs', members.length);
-                return;
-            }
-        } catch (error) {
-            console.error('Error processing custom shares:', error);
-            expenseMessage.textContent = 'Invalid custom shares format. Use comma-separated percentages.';
-            return;
-        }
-    }
-    let tx;
-    try {
-        console.log('Submitting expense:', { groupId, description, amount, splitType, customShares });
-        tx = await getContract().methods.addExpense(groupId, description, amount, splitType, customShares).send({
-            from: await getAccount(),
-            value: '0',
-            gasPrice: web3.utils.toWei('50', 'gwei')
-        });
-        expenseMessage.innerHTML = '<strong>Expense added successfully!</strong> <a href="https://explorer-unstable.shardeum.org/tx/' + tx.transactionHash + '" target="_blank">View Tx</a>';
-        console.log('Expense added, tx:', tx.transactionHash);
-        setTimeout(function() {
-            e.target.reset();
-            populateDashboard();
-        }, 3000);
-    } catch (error) {
-        console.error('Expense submission error:', error);
-        expenseMessage.textContent = 'Error: ' + (error.message.includes('revert') ? 'Invalid input or group is settled. Check inputs and try again.' : error.message);
-        if (error.message.includes('Failed to check for transaction receipt') || error.message.includes('network error')) {
-            if (RPC_URLS.indexOf(web3.currentProvider.host) < RPC_URLS.length - 1) {
-                const nextRpcIndex = RPC_URLS.indexOf(web3.currentProvider.host) + 1;
-                console.log('Retrying with fallback RPC: ' + RPC_URLS[nextRpcIndex]);
-                web3.setProvider(new Web3.providers.HttpProvider(RPC_URLS[nextRpcIndex]));
-                contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
-                try {
-                    tx = await getContract().methods.addExpense(groupId, description, amount, splitType, customShares).send({
-                        from: await getAccount(),
-                        value: '0',
-                        gasPrice: web3.utils.toWei('50', 'gwei')
-                    });
-                    expenseMessage.innerHTML = '<strong>Expense added successfully!</strong> <a href="https://explorer-unstable.shardeum.org/tx/' + tx.transactionHash + '" target="_blank">View Tx</a>';
-                    console.log('Expense added after RPC retry, tx:', tx.transactionHash);
-                    setTimeout(function() {
-                        e.target.reset();
-                        populateDashboard();
-                    }, 3000);
-                } catch (retryError) {
-                    console.error('Retry failed:', retryError);
-                    expenseMessage.textContent = 'Error after retry: ' + (retryError.message.includes('revert') ? 'Invalid input or group is settled.' : retryError.message);
-                }
-            }
-        }
-    }
-}
-
-// Helper functions to avoid null checks
-function getContract() {
-    return contract;
-}
-
-function getAccount() {
-    return userAccount;
-}
-
-// Initialize on page load
-document.addEventListener('DOMContentLoaded', () => {
-    checkMetaMaskConnection();
-    const expenseForm = document.getElementById('expenseForm');
-    if (expenseForm) {
-        expenseForm.addEventListener('submit', handleExpenseFormSubmit);
-        const splitSelect = document.getElementById('split');
-        if (splitSelect) splitSelect.addEventListener('change', toggleCustomShares);
-        const groupSelect = document.getElementById('groupId');
-        if (groupSelect) groupSelect.addEventListener('change', toggleGroupCreation);
-        const addMemberButton = document.getElementById('addMember');
-        if (addMemberButton) addMemberButton.addEventListener('click', addMemberField);
-    }
-    const metamaskButton = document.querySelector('.metamask-button');
-    if (metamaskButton) {
-        metamaskButton.addEventListener('click', handleMetaMaskToggle);
-    }
-    if (document.getElementById('amount') && document.getElementById('currency')) {
-        document.getElementById('amount').addEventListener('input', updateShmAmount);
-        document.getElementById('currency').addEventListener('change', updateShmAmount);
-        fetchShmPrice();
-    }
+document.addEventListener('DOMContentLoaded', async () => {
+    await checkMetaMaskConnection();
+    setupEventListeners();
 });

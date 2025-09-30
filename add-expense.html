@@ -26,29 +26,31 @@
         <section>
             <h2>Add a New Expense</h2>
             <form id="expenseForm">
-                <label for="description">Description:</label>
-                <input type="text" id="description" placeholder="e.g., Dinner at Restaurant" required>
-                <label for="amount">Amount:</label>
-                <input type="number" id="amount" placeholder="e.g., 100" step="0.01" required>
-                <label for="currency">Currency:</label>
-                <select id="currency" required>
-                    <option value="usd" selected>USD</option>
-                    <option value="eur">EUR</option>
-                    <option value="inr">INR</option>
-                    <option value="shm">SHM</option>
-                </select>
-                <p id="shmAmount">SHM Amount: Enter amount to calculate</p>
-                <label for="split">Split Type:</label>
-                <select id="split" required>
-                    <option value="equal">Equal</option>
-                    <option value="custom">Custom (% shares, sum to 100)</option>
-                </select>
-                <label for="customShares" id="customLabel" style="display:none;">Custom Shares (%, comma-separated):</label>
-                <input type="text" id="customShares" placeholder="e.g., 40,30,30" style="display:none;">
-                <label for="groupId">Group:</label>
-                <select id="groupId" required>
-                    <option value="" disabled selected>Select a group</option>
-                </select>
+                <div id="expenseFields">
+                    <label for="groupId">Group:</label>
+                    <select id="groupId" required>
+                        <option value="" disabled selected>Loading groups...</option>
+                    </select>
+                    <label for="description">Description:</label>
+                    <input type="text" id="description" placeholder="e.g., Dinner at Restaurant" required>
+                    <label for="amount">Amount:</label>
+                    <input type="number" id="amount" placeholder="e.g., 100" step="0.01" required>
+                    <label for="currency">Currency:</label>
+                    <select id="currency" required>
+                        <option value="usd" selected>USD</option>
+                        <option value="eur">EUR</option>
+                        <option value="inr">INR</option>
+                        <option value="shm">SHM</option>
+                    </select>
+                    <p id="shmAmount">SHM Amount: Enter amount to calculate</p>
+                    <label for="split">Split Type:</label>
+                    <select id="split" required>
+                        <option value="equal">Equal</option>
+                        <option value="custom">Custom (% shares, sum to 100)</option>
+                    </select>
+                    <label for="customShares" id="customLabel" style="display:none;">Custom Shares (%, comma-separated):</label>
+                    <input type="text" id="customShares" placeholder="e.g., 40,30,30" style="display:none;">
+                </div>
                 <div id="groupCreation" style="display:none;">
                     <h3>Create a New Group</h3>
                     <label for="groupName">Group Name:</label>
@@ -68,7 +70,7 @@
                     </div>
                     <button type="button" id="addMemberButton">Add Member</button>
                 </div>
-                <button type="submit" id="submitButton" class="submit-group">Add Expense</button>
+                <button type="submit" id="submitButton" class="submit-group">Submit</button>
                 <p id="expenseMessage"></p>
             </form>
         </section>
