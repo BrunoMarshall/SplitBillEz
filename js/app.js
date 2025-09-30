@@ -1,5 +1,5 @@
 // app.js - Shared Web3 Integration for SplitBillEz
-const CONTRACT_ADDRESS = '0xff99db46c84bb5a241b2560807dab98c04d5c411';
+const CONTRACT_ADDRESS = '0x753408c72dd498111157ad747e6e605463b93380';
 const CONTRACT_ABI = [
     {
         "inputs": [],
@@ -53,6 +53,14 @@ const CONTRACT_ABI = [
         "type": "event"
     },
     {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "uint256", "name": "groupId", "type": "uint256"}
+        ],
+        "name": "GroupSettled",
+        "type": "event"
+    },
+    {
         "inputs": [
             {"internalType": "uint256", "name": "_groupId", "type": "uint256"},
             {"internalType": "string", "name": "_description", "type": "string"},
@@ -79,12 +87,12 @@ const CONTRACT_ABI = [
         "inputs": [{"internalType": "uint256", "name": "_expenseId", "type": "uint256"}],
         "name": "getExpense",
         "outputs": [
-            {"internalType": "uint256", "name": "groupId", "type": "uint256"},
-            {"internalType": "string", "name": "description", "type": "string"},
-            {"internalType": "uint256", "name": "amount", "type": "uint256"},
-            {"internalType": "address", "name": "payer", "type": "address"},
-            {"internalType": "string", "name": "splitType", "type": "string"},
-            {"internalType": "uint256[]", "name": "customShares", "type": "uint256[]"}
+            {"internalType": "uint256", "name": "", "type": "uint256"},
+            {"internalType": "string", "name": "", "type": "string"},
+            {"internalType": "uint256", "name": "", "type": "uint256"},
+            {"internalType": "address", "name": "", "type": "address"},
+            {"internalType": "string", "name": "", "type": "string"},
+            {"internalType": "uint256[]", "name": "", "type": "uint256[]"}
         ],
         "stateMutability": "view",
         "type": "function"
@@ -93,8 +101,8 @@ const CONTRACT_ABI = [
         "inputs": [{"internalType": "uint256", "name": "_groupId", "type": "uint256"}],
         "name": "getGroup",
         "outputs": [
-            {"internalType": "string", "name": "name", "type": "string"},
-            {"internalType": "address[]", "name": "members", "type": "address[]"}
+            {"internalType": "string", "name": "", "type": "string"},
+            {"internalType": "address[]", "name": "", "type": "address[]"}
         ],
         "stateMutability": "view",
         "type": "function"
@@ -103,8 +111,8 @@ const CONTRACT_ABI = [
         "inputs": [{"internalType": "uint256", "name": "_groupId", "type": "uint256"}],
         "name": "getGroupBalances",
         "outputs": [
-            {"internalType": "address[]", "name": "members", "type": "address[]"},
-            {"internalType": "int256[]", "name": "bals", "type": "int256[]"}
+            {"internalType": "address[]", "name": "", "type": "address[]"},
+            {"internalType": "int256[]", "name": "", "type": "int256[]"}
         ],
         "stateMutability": "view",
         "type": "function"
@@ -113,6 +121,13 @@ const CONTRACT_ABI = [
         "inputs": [{"internalType": "uint256", "name": "_groupId", "type": "uint256"}],
         "name": "getGroupExpenseIds",
         "outputs": [{"internalType": "uint256[]", "name": "", "type": "uint256[]"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "_groupId", "type": "uint256"}],
+        "name": "getGroupSettledStatus",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
         "stateMutability": "view",
         "type": "function"
     },
@@ -162,6 +177,15 @@ const CONTRACT_ABI = [
         ],
         "name": "userGroups",
         "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256", "name": "", "type": "uint256"}
+        ],
+        "name": "isGroupSettled",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
         "stateMutability": "view",
         "type": "function"
     }
@@ -249,6 +273,20 @@ async function initWeb3(rpcIndex = 0, maxRetries = 3) {
         contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
         console.log('Connected account:', userAccount);
         console.log('Contract initialized:', !!contract);
+
+        // Listen for GroupSettled events
+        contract.events.GroupSettled({
+            filter: {},
+            fromBlock: 'latest'
+        }, (error, event) => {
+            if (error) {
+                console.error('Error in GroupSettled event listener:', error);
+                return;
+            }
+            console.log(`Group ${event.returnValues.groupId} settled, refreshing dashboard`);
+            populateDashboard();
+        });
+
         await updateUI();
         window.ethereum.on('error', async (error) => {
             console.error('MetaMask provider error:', error, 'Current RPC:', web3.currentProvider.host);
@@ -335,7 +373,67 @@ function updateMemberName(address) {
         memberNames[address.toLowerCase()] = newName.trim();
         localStorage.setItem('memberNames', JSON.stringify(memberNames));
         console.log(`Updated name for ${address} to ${newName}`);
-        populateDashboard(); // Refresh dashboard to reflect new name
+        populateDashboard();
+    }
+}
+
+function getGroupName(groupId) {
+    const groupNames = JSON.parse(localStorage.getItem('groupNames') || '{}');
+    return groupNames[groupId] || `Unnamed Group`;
+}
+
+function updateGroupName(groupId) {
+    const currentName = getGroupName(groupId);
+    const newName = prompt(`Enter new name for group ${groupId} (current: ${currentName}):`, currentName);
+    if (newName && newName.trim() && newName !== currentName) {
+        const groupNames = JSON.parse(localStorage.getItem('groupNames') || '{}');
+        groupNames[groupId] = newName.trim();
+        localStorage.setItem('groupNames', JSON.stringify(groupNames));
+        console.log(`Updated name for group ${groupId} to ${newName}`);
+        populateDashboard();
+        if (document.getElementById('groupId')) {
+            populateGroupDropdown();
+        }
+    }
+}
+
+async function isGroupSettled(groupId) {
+    try {
+        const isSettled = await getContract().methods.getGroupSettledStatus(groupId).call();
+        if (isSettled) {
+            const settledGroups = JSON.parse(localStorage.getItem('settledGroups') || '{}');
+            settledGroups[groupId] = true;
+            localStorage.setItem('settledGroups', JSON.stringify(settledGroups));
+        }
+        return isSettled;
+    } catch (error) {
+        console.error(`Error checking settled status for group ${groupId}:`, error);
+        return false;
+    }
+}
+
+async function fetchSettlementHistory(groupId) {
+    try {
+        const events = await getContract().getPastEvents('DebtSettled', {
+            filter: { groupId },
+            fromBlock: 0,
+            toBlock: 'latest'
+        });
+        const settlements = await Promise.all(events.map(async event => {
+            const block = await web3.eth.getBlock(event.blockNumber);
+            return {
+                from: event.returnValues.from,
+                to: event.returnValues.to,
+                amount: parseFloat(web3.utils.fromWei(event.returnValues.amount, 'ether')).toFixed(2),
+                txHash: event.transactionHash,
+                timestamp: block ? new Date(block.timestamp * 1000).toLocaleString() : 'N/A'
+            };
+        }));
+        console.log(`Settlement history for group ${groupId}:`, settlements);
+        return settlements;
+    } catch (error) {
+        console.error(`Error fetching settlement history for group ${groupId}:`, error);
+        return [];
     }
 }
 
@@ -476,8 +574,8 @@ async function getDebtAmount(groupId, toAddress) {
     try {
         const userAddress = await getAccount();
         const balanceData = await getContract().methods.getGroupBalances(groupId).call();
-        const balMembers = balanceData.members || balanceData[0] || [];
-        const balances = balanceData.bals || balanceData[1] || [];
+        const balMembers = balanceData[0] || [];
+        const balances = balanceData[1] || [];
         const userIndex = balMembers.findIndex(addr => addr.toLowerCase() === userAddress.toLowerCase());
         const toIndex = balMembers.findIndex(addr => addr.toLowerCase() === toAddress.toLowerCase());
         if (userIndex === -1 || toIndex === -1) {
@@ -536,8 +634,8 @@ async function calculateContributionBreakdown(groupId, members, expenses) {
         }
 
         const balanceData = await getContract().methods.getGroupBalances(groupId).call();
-        const balMembers = balanceData.members || balanceData[0] || [];
-        const balances = balanceData.bals || balanceData[1] || [];
+        const balMembers = balanceData[0] || [];
+        const balances = balanceData[1] || [];
         breakdown.forEach(b => {
             const balIndex = balMembers.findIndex(addr => addr.toLowerCase() === b.address.toLowerCase());
             if (balIndex !== -1) {
@@ -569,14 +667,14 @@ async function getSettlementLines(groupId, members, balances) {
         for (let i = 0; i < members.length; i++) {
             const from = members[i].toLowerCase();
             const balance = parseFloat(web3.utils.fromWei(balances[i] || '0', 'ether'));
-            if (balance <= 0) continue; // Skip members who don't owe anything
+            if (balance <= 0) continue;
             for (let j = 0; j < members.length; j++) {
-                if (i === j) continue; // Skip self
+                if (i === j) continue;
                 const to = members[j].toLowerCase();
                 const toBalance = parseFloat(web3.utils.fromWei(balances[j] || '0', 'ether'));
-                if (toBalance >= 0) continue; // Skip members who aren't owed
+                if (toBalance >= 0) continue;
                 const debt = Math.min(balance, Math.abs(toBalance));
-                if (debt > 0.01) { // Threshold to avoid negligible debts
+                if (debt > 0.01) {
                     lines.push({
                         from: members[i],
                         to: members[j],
@@ -615,7 +713,6 @@ async function populateDashboard() {
         const groupCount = parseInt(await getContract().methods.groupCount().call()) || 0;
         console.log('Total group count from contract:', groupCount);
         const groupIds = new Set();
-        // Primary scan: userGroups array
         for (let i = 0; i < Math.min(groupCount, 50); i++) {
             try {
                 const groupId = await getContract().methods.userGroups(userAddress, i).call();
@@ -630,12 +727,11 @@ async function populateDashboard() {
                 }
             }
         }
-        // Enhanced fallback: Scan all groups and check membership
         console.log('Running enhanced fallback scan for all groups...');
         for (let i = 1; i <= groupCount; i++) {
             try {
                 const result = await getContract().methods.getGroup(i).call();
-                const members = result.members || result[1] || [];
+                const members = result[1] || [];
                 if (members && Array.isArray(members) && members.map(addr => addr.toLowerCase()).includes(userAddress.toLowerCase())) {
                     groupIds.add(i.toString());
                     console.log(`Added groupId ${i} from fallback scan (user is member)`);
@@ -649,16 +745,28 @@ async function populateDashboard() {
             dashboardContent.innerHTML = '<p>No groups found for this account. Create one in the Add Expense page or verify your MetaMask account.</p>';
             return;
         }
+        const showSettledGroups = JSON.parse(localStorage.getItem('showSettledGroups') || 'false');
+        const toggleButton = document.createElement('button');
+        toggleButton.className = 'toggle-settled-button';
+        toggleButton.textContent = showSettledGroups ? 'Hide Settled Groups' : 'Show Settled Groups';
+        toggleButton.onclick = () => {
+            const newState = !showSettledGroups;
+            localStorage.setItem('showSettledGroups', JSON.stringify(newState));
+            populateDashboard();
+        };
         dashboardContent.innerHTML = '';
+        dashboardContent.appendChild(toggleButton);
         for (let groupId of groupIds) {
             try {
                 const result = await getContract().methods.getGroup(groupId).call();
-                const name = result.name || result[0] || 'Unnamed Group';
-                const members = result.members || result[1] || [];
+                const onChainName = result[0] || 'Unnamed Group';
+                const groupName = getGroupName(groupId);
+                const members = result[1] || [];
                 if (!members || !Array.isArray(members)) {
                     console.warn(`Group ${groupId} has invalid members array:`, members);
                     continue;
                 }
+                const isSettled = await isGroupSettled(groupId);
                 const groupBlockie = await createBlockie(groupId.toString(), 64);
                 const memberAvatars = await Promise.all(
                     members.map(async addr => {
@@ -671,8 +779,8 @@ async function populateDashboard() {
                     })
                 );
                 const balanceData = await getContract().methods.getGroupBalances(groupId).call();
-                const balMembers = balanceData.members || balanceData[0] || [];
-                const balances = balanceData.bals || balanceData[1] || [];
+                const balMembers = balanceData[0] || [];
+                const balances = balanceData[1] || [];
                 const balanceAvatars = await Promise.all(
                     balMembers.map(async addr => ({
                         addr,
@@ -689,11 +797,11 @@ async function populateDashboard() {
                             const block = await web3.eth.getBlock('latest');
                             return {
                                 id: expenseId,
-                                description: expense.description || 'No description',
-                                amount: web3.utils.fromWei(expense.amount || '0', 'ether'),
-                                payer: expense.payer || 'Unknown',
-                                splitType: expense.splitType || 'Unknown',
-                                customShares: expense.customShares || [],
+                                description: expense[1] || 'No description',
+                                amount: web3.utils.fromWei(expense[2] || '0', 'ether'),
+                                payer: expense[3] || 'Unknown',
+                                splitType: expense[4] || 'Unknown',
+                                customShares: expense[5] || [],
                                 timestamp: block ? new Date(block.timestamp * 1000).toLocaleString() : 'N/A'
                             };
                         } catch (error) {
@@ -703,86 +811,103 @@ async function populateDashboard() {
                     })
                 ).then(results => results.filter(exp => exp !== null));
                 const contributionBreakdown = await calculateContributionBreakdown(groupId, members, groupExpenses);
-                const settlementLines = await getSettlementLines(groupId, balMembers, balances);
-                const groupDiv = document.createElement('div');
-                groupDiv.className = 'group';
+                const settlementLines = isSettled ? [] : await getSettlementLines(groupId, balMembers, balances);
+                const settlementHistory = await fetchSettlementHistory(groupId);
+                const groupDiv = document.createElement('details');
+                groupDiv.className = `group ${isSettled ? 'settled-group' : ''}`;
+                if (isSettled && !showSettledGroups) {
+                    groupDiv.setAttribute('hidden', 'true');
+                }
                 groupDiv.innerHTML = `
-                    <div class="group-header">
+                    <summary>
                         <img src="${groupBlockie}" alt="Group ${groupId} Avatar" class="group-avatar">
-                        <h3>${name} (ID: ${groupId})</h3>
-                    </div>
-                    <p><strong>Members:</strong></p>
-                    <div class="members-container">
-                        ${memberAvatars.map(({ name, avatar, addr }) => `
-                            <span class="member-item">
-                                <img src="${avatar}" class="member-avatar" alt="${name} Avatar">
-                                <span class="member-name">${name} (${addr.slice(0, 7)})</span>
-                                <button class="edit-name-button" data-address="${addr}" title="Edit Name">✏️</button>
-                            </span>
-                        `).join('')}
-                    </div>
-                    <h4>Expenses:</h4>
-                    <div class="expenses-placeholder">Loading expenses...</div>
-                    <h4>Who Owes Whom:</h4>
-                    <div class="settlement-container">
-                        ${settlementLines.length > 0 ? settlementLines.map(line => `
-                            <div class="settlement-line ${line.fromAddr.toLowerCase() === userAddress.toLowerCase() ? 'negative' : 'positive'}" data-from="${line.fromAddr}" data-to="${line.toAddr}" data-amount="${line.amount}">
-                                <span class="settlement-icon">${line.fromAddr.toLowerCase() === userAddress.toLowerCase() ? '↓' : '↑'}</span>
-                                <span>${line.fromName} (${line.fromAddr.slice(0, 7)}) → ${line.toName} (${line.toAddr.slice(0, 7)}): ${line.amount} SHM</span>
-                                ${line.fromAddr.toLowerCase() === userAddress.toLowerCase() ? `<button class="settle-now-button" data-group-id="${groupId}" data-to="${line.toAddr}" data-amount="${line.amount}">Settle Now</button>` : ''}
-                            </div>
-                        `).join('') : '<p>No settlements needed.</p>'}
-                    </div>
-                    <h4>Contribution Breakdown:</h4>
-                    <table class="contribution-table">
-                        <thead>
-                            <tr>
-                                <th>Member</th>
-                                <th>Total Paid (SHM)</th>
-                                <th>Fair Share (SHM)</th>
-                                <th>Net Balance (SHM)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${contributionBreakdown.map(b => `
-                                <tr>
-                                    <td>
-                                        <img src="${balanceAvatars.find(ba => ba.addr.toLowerCase() === b.address.toLowerCase())?.avatar || createBlockie(b.address, 32, b.name[0].toUpperCase())}" class="balance-avatar" alt="${b.name} Avatar">
-                                        ${b.name} (${b.address.slice(0, 7)})
-                                    </td>
-                                    <td>${b.totalPaid.toFixed(2)}</td>
-                                    <td>${b.fairShare.toFixed(2)}</td>
-                                    <td class="${b.netBalance > 0 ? 'positive' : b.netBalance < 0 ? 'negative' : 'settled'}">
-                                        <span class="settlement-icon">${b.netBalance > 0 ? '↑' : b.netBalance < 0 ? '↓' : ''}</span>
-                                        ${b.netBalance.toFixed(2)}
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td colspan="4">
-                                        <div class="progress-container">
-                                            <div class="progress-bar" style="width: ${(b.totalPaid / (b.fairShare || 1)) * 100}%"></div>
-                                        </div>
-                                    </td>
-                                </tr>
+                        <h3 style="display: inline;">${groupName} (ID: ${groupId})${isSettled ? ' [Settled]' : ''}</h3>
+                        <button class="edit-group-name-button" data-group-id="${groupId}" title="Edit Group Name">✏️</button>
+                    </summary>
+                    <div class="group-content">
+                        <p><strong>Members:</strong></p>
+                        <div class="members-container">
+                            ${memberAvatars.map(({ name, avatar, addr }) => `
+                                <span class="member-item">
+                                    <img src="${avatar}" class="member-avatar" alt="${name} Avatar">
+                                    <span class="member-name">${name} (${addr.slice(0, 7)})</span>
+                                    <button class="edit-name-button" data-address="${addr}" title="Edit Name">✏️</button>
+                                </span>
                             `).join('')}
-                        </tbody>
-                    </table>
-                    <h4>Settle Debt</h4>
-                    <form id="settleDebtForm-${groupId}" class="settle-debt-form">
-                        <input type="hidden" name="groupId" value="${groupId}">
-                        <label for="settleTo-${groupId}">Pay To:</label>
-                        <select id="settleTo-${groupId}" required>
-                            <option value="" disabled selected>Select a member</option>
-                            ${members
-                                .filter(addr => addr.toLowerCase() !== userAddress.toLowerCase())
-                                .map(addr => `<option value="${addr}">${getMemberName(addr)}</option>`)
-                                .join('')}
-                        </select>
-                        <label for="settleAmount-${groupId}">Amount (SHM):</label>
-                        <input type="number" id="settleAmount-${groupId}" placeholder="Select a member to calculate" step="0.01" required>
-                        <button type="submit" class="submit-group">Settle Debt</button>
-                    </form>
-                    <p id="settleMessage-${groupId}"></p>
+                        </div>
+                        <h4>Expenses:</h4>
+                        <div class="expenses-placeholder">Loading expenses...</div>
+                        <h4>Who Owes Whom:</h4>
+                        <div class="settlement-container">
+                            ${settlementLines.length > 0 ? settlementLines.map(line => `
+                                <div class="settlement-line ${line.fromAddr.toLowerCase() === userAddress.toLowerCase() ? 'negative' : 'positive'}" data-from="${line.fromAddr}" data-to="${line.toAddr}" data-amount="${line.amount}">
+                                    <span class="settlement-icon">${line.fromAddr.toLowerCase() === userAddress.toLowerCase() ? '↓' : '↑'}</span>
+                                    <span>${line.fromName} (${line.fromAddr.slice(0, 7)}) → ${line.toName} (${line.toAddr.slice(0, 7)}): ${line.amount} SHM</span>
+                                    ${line.fromAddr.toLowerCase() === userAddress.toLowerCase() ? `<button class="settle-now-button" data-group-id="${groupId}" data-to="${line.toAddr}" data-amount="${line.amount}">Settle Now</button>` : ''}
+                                </div>
+                            `).join('') : '<p>No settlements needed.</p>'}
+                        </div>
+                        <h4>Settlement History:</h4>
+                        <div class="settlement-history">
+                            ${settlementHistory.length > 0 ? settlementHistory.map(settlement => `
+                                <div class="settlement-history-item">
+                                    <span>${getMemberName(settlement.from)} (${settlement.from.slice(0, 7)}) paid ${getMemberName(settlement.to)} (${settlement.to.slice(0, 7)}): ${settlement.amount} SHM</span>
+                                    <span>Tx: <a href="https://explorer-unstable.shardeum.org/tx/${settlement.txHash}" target="_blank">${settlement.txHash.slice(0, 6)}...${settlement.txHash.slice(-4)}</a></span>
+                                    <span>Date: ${settlement.timestamp}</span>
+                                </div>
+                            `).join('') : '<p>No settlement history.</p>'}
+                        </div>
+                        <h4>Contribution Breakdown:</h4>
+                        <table class="contribution-table">
+                            <thead>
+                                <tr>
+                                    <th>Member</th>
+                                    <th>Total Paid (SHM)</th>
+                                    <th>Fair Share (SHM)</th>
+                                    <th>Net Balance (SHM)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${contributionBreakdown.map(b => `
+                                    <tr>
+                                        <td>
+                                            <img src="${balanceAvatars.find(ba => ba.addr.toLowerCase() === b.address.toLowerCase())?.avatar || createBlockie(b.address, 32, b.name[0].toUpperCase())}" class="balance-avatar" alt="${b.name} Avatar">
+                                            ${b.name} (${b.address.slice(0, 7)})
+                                        </td>
+                                        <td>${b.totalPaid.toFixed(2)}</td>
+                                        <td>${b.fairShare.toFixed(2)}</td>
+                                        <td class="${b.netBalance > 0 ? 'positive' : b.netBalance < 0 ? 'negative' : 'settled'}">
+                                            <span class="settlement-icon">${b.netBalance > 0 ? '↑' : b.netBalance < 0 ? '↓' : ''}</span>
+                                            ${b.netBalance.toFixed(2)}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="4">
+                                            <div class="progress-container">
+                                                <div class="progress-bar" style="width: ${(b.totalPaid / (b.fairShare || 1)) * 100}%"></div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                        <h4>Settle Debt</h4>
+                        <form id="settleDebtForm-${groupId}" class="settle-debt-form">
+                            <input type="hidden" name="groupId" value="${groupId}">
+                            <label for="settleTo-${groupId}">Pay To:</label>
+                            <select id="settleTo-${groupId}" required>
+                                <option value="" disabled selected>Select a member</option>
+                                ${members
+                                    .filter(addr => addr.toLowerCase() !== userAddress.toLowerCase())
+                                    .map(addr => `<option value="${addr}">${getMemberName(addr)}</option>`)
+                                    .join('')}
+                            </select>
+                            <label for="settleAmount-${groupId}">Amount (SHM):</label>
+                            <input type="number" id="settleAmount-${groupId}" placeholder="Select a member to calculate" step="0.01" required>
+                            <button type="submit" class="submit-group">Settle Debt</button>
+                        </form>
+                        <p id="settleMessage-${groupId}"></p>
+                    </div>
                 `;
                 dashboardContent.appendChild(groupDiv);
                 const expenseAvatars = await Promise.all(
@@ -841,7 +966,7 @@ async function populateDashboard() {
                         await populateDashboard();
                     } catch (error) {
                         console.error(`Debt settlement error for group ${settleGroupId}:`, error);
-                        settleMessage.textContent = 'Error: ' + (error.message.includes('revert') ? 'Invalid input or insufficient debt. Check inputs and try again.' : error.message);
+                        settleMessage.textContent = 'Error: ' + (error.message.includes('revert') ? 'Invalid input or group is settled. Check inputs and try again.' : error.message);
                     }
                 });
                 const editNameButtons = groupDiv.querySelectorAll('.edit-name-button');
@@ -850,6 +975,10 @@ async function populateDashboard() {
                         const address = button.dataset.address;
                         updateMemberName(address);
                     });
+                });
+                const editGroupNameButton = groupDiv.querySelector('.edit-group-name-button');
+                editGroupNameButton.addEventListener('click', () => {
+                    updateGroupName(groupId);
                 });
                 const settleNowButtons = groupDiv.querySelectorAll('.settle-now-button');
                 settleNowButtons.forEach(button => {
@@ -879,7 +1008,7 @@ async function populateDashboard() {
                             await populateDashboard();
                         } catch (error) {
                             console.error(`Debt settlement error for group ${settleGroupId}:`, error);
-                            settleMessage.textContent = 'Error: ' + (error.message.includes('revert') ? 'Invalid input or insufficient debt.' : error.message);
+                            settleMessage.textContent = 'Error: ' + (error.message.includes('revert') ? 'Invalid input or group is settled.' : error.message);
                         }
                     });
                 });
@@ -896,7 +1025,7 @@ async function populateDashboard() {
 async function fetchShmPrice() {
     const cacheKeyPrefix = 'shmPriceCache_';
     const cacheTimestampKeyPrefix = 'shmPriceTimestamp_';
-    const cacheDuration = 10 * 60 * 1000; // 10 minutes
+    const cacheDuration = 10 * 60 * 1000;
     const now = Date.now();
     const currencies = ['usd', 'eur', 'inr', 'shm'];
     shmPrice = shmPrice || {};
@@ -1028,7 +1157,6 @@ async function populateGroupDropdown() {
         const groupCount = parseInt(await getContract().methods.groupCount().call()) || 0;
         console.log('Total group count from contract:', groupCount);
         const groupIds = new Set();
-        // Primary scan: userGroups array
         for (let i = 0; i < Math.min(groupCount, 50); i++) {
             try {
                 const groupId = await getContract().methods.userGroups(userAddress, i).call();
@@ -1043,12 +1171,11 @@ async function populateGroupDropdown() {
                 }
             }
         }
-        // Enhanced fallback: Scan all groups and check membership
         console.log('Running enhanced fallback scan for all groups...');
         for (let i = 1; i <= groupCount; i++) {
             try {
                 const result = await getContract().methods.getGroup(i).call();
-                const members = result.members || result[1] || [];
+                const members = result[1] || [];
                 if (members && Array.isArray(members) && members.map(addr => addr.toLowerCase()).includes(userAddress.toLowerCase())) {
                     groupIds.add(i.toString());
                     console.log(`Added groupId ${i} from fallback scan (user is member)`);
@@ -1071,10 +1198,15 @@ async function populateGroupDropdown() {
             for (let groupId of groupIds) {
                 try {
                     const result = await getContract().methods.getGroup(groupId).call();
-                    const name = result.name || result[0] || 'Unnamed Group';
+                    const onChainName = result[0] || 'Unnamed Group';
+                    const displayName = getGroupName(groupId);
+                    const isSettled = await isGroupSettled(groupId);
                     const option = document.createElement('option');
                     option.value = groupId;
-                    option.textContent = name + ' (ID: ' + groupId + ')';
+                    option.textContent = `${displayName} (ID: ${groupId})${isSettled ? ' [Settled]' : ''}`;
+                    if (isSettled) {
+                        option.disabled = true;
+                    }
                     groupSelect.appendChild(option);
                 } catch (error) {
                     console.error(`Error fetching group ${groupId}:`, error);
@@ -1184,6 +1316,7 @@ async function handleExpenseFormSubmit(e) {
         }
         const members = [];
         const newMemberNames = {};
+        const newGroupNames = JSON.parse(localStorage.getItem('groupNames') || '{}');
         try {
             const userAddress = (await getAccount()).toLowerCase();
             for (let input of Array.from(memberInputs)) {
@@ -1213,6 +1346,9 @@ async function handleExpenseFormSubmit(e) {
                 value: '0',
                 gasPrice: web3.utils.toWei('50', 'gwei')
             });
+            const newGroupId = parseInt(await getContract().methods.groupCount().call());
+            newGroupNames[newGroupId] = groupName;
+            localStorage.setItem('groupNames', JSON.stringify(newGroupNames));
             expenseMessage.innerHTML = '<strong>Group created successfully!</strong> <a href="https://explorer-unstable.shardeum.org/tx/' + tx.transactionHash + '" target="_blank">View Tx</a>';
             console.log('Group created, tx:', tx.transactionHash);
             setTimeout(function() {
@@ -1220,9 +1356,7 @@ async function handleExpenseFormSubmit(e) {
                 submitButton.textContent = 'Add Expense';
                 e.target.reset();
                 populateGroupDropdown();
-                getContract().methods.groupCount().call().then(newGroupId => {
-                    document.getElementById('groupId').value = parseInt(newGroupId);
-                });
+                document.getElementById('groupId').value = newGroupId;
             }, 3000);
         } catch (error) {
             console.error('Group creation error:', error);
@@ -1233,6 +1367,11 @@ async function handleExpenseFormSubmit(e) {
     if (!groupId) {
         expenseMessage.textContent = 'Please select a group.';
         console.error('No group selected');
+        return;
+    }
+    const isSettled = await isGroupSettled(groupId);
+    if (isSettled) {
+        expenseMessage.textContent = 'This group is fully settled and cannot accept new expenses.';
         return;
     }
     const description = document.getElementById('description')?.value;
@@ -1287,7 +1426,7 @@ async function handleExpenseFormSubmit(e) {
         }, 3000);
     } catch (error) {
         console.error('Expense submission error:', error);
-        expenseMessage.textContent = 'Error: ' + (error.message.includes('Failed to check for transaction receipt') || error.message.includes('network error') ? 'Failed to connect to Shardeum RPC. Please check your network and try again.' : error.message.includes('revert') ? 'Invalid input or contract revert. Check inputs and try again.' : error.message);
+        expenseMessage.textContent = 'Error: ' + (error.message.includes('revert') ? 'Invalid input or group is settled. Check inputs and try again.' : error.message);
         if (error.message.includes('Failed to check for transaction receipt') || error.message.includes('network error')) {
             if (RPC_URLS.indexOf(web3.currentProvider.host) < RPC_URLS.length - 1) {
                 const nextRpcIndex = RPC_URLS.indexOf(web3.currentProvider.host) + 1;
@@ -1300,70 +1439,50 @@ async function handleExpenseFormSubmit(e) {
                         value: '0',
                         gasPrice: web3.utils.toWei('50', 'gwei')
                     });
-                    expenseMessage.innerHTML = '<strong>Expense added successfully (retry)!</strong> <a href="https://explorer-unstable.shardeum.org/tx/' + tx.transactionHash + '" target="_blank">View Tx</a>';
-                    console.log('Expense added with fallback RPC, tx:', tx.transactionHash);
+                    expenseMessage.innerHTML = '<strong>Expense added successfully!</strong> <a href="https://explorer-unstable.shardeum.org/tx/' + tx.transactionHash + '" target="_blank">View Tx</a>';
+                    console.log('Expense added after RPC retry, tx:', tx.transactionHash);
                     setTimeout(function() {
                         e.target.reset();
                         populateDashboard();
                     }, 3000);
                 } catch (retryError) {
-                    console.error('Retry failed with fallback RPC:', retryError);
-                    expenseMessage.textContent = 'Error: Failed to add expense after retrying with fallback RPC. Please try again later.';
+                    console.error('Retry failed:', retryError);
+                    expenseMessage.textContent = 'Error after retry: ' + (retryError.message.includes('revert') ? 'Invalid input or group is settled.' : retryError.message);
                 }
-            } else {
-                expenseMessage.textContent = 'Error: All RPC endpoints failed. Please check your network and try again.';
             }
         }
     }
 }
 
+// Helper functions to avoid null checks
 function getContract() {
     return contract;
 }
 
-async function getAccount() {
-    if (!web3 || !window.ethereum) return null;
-    try {
-        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-        return accounts[0] || null;
-    } catch (error) {
-        console.error('Error getting account:', error);
-        return null;
-    }
+function getAccount() {
+    return userAccount;
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
-    console.log('DOM fully loaded');
-    const metaMaskButton = document.querySelector('.metamask-button');
-    if (metaMaskButton) {
-        metaMaskButton.addEventListener('click', handleMetaMaskToggle);
-    }
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+    checkMetaMaskConnection();
     const expenseForm = document.getElementById('expenseForm');
     if (expenseForm) {
         expenseForm.addEventListener('submit', handleExpenseFormSubmit);
-        console.log('Expense form listener added');
         const splitSelect = document.getElementById('split');
-        if (splitSelect) {
-            splitSelect.addEventListener('change', toggleCustomShares);
-        }
+        if (splitSelect) splitSelect.addEventListener('change', toggleCustomShares);
         const groupSelect = document.getElementById('groupId');
-        if (groupSelect) {
-            groupSelect.addEventListener('change', toggleGroupCreation);
-        }
-        const addMemberButton = document.getElementById('addMemberButton');
-        if (addMemberButton) {
-            addMemberButton.addEventListener('click', addMemberField);
-        }
-        const amountInput = document.getElementById('amount');
-        const currencySelect = document.getElementById('currency');
-        if (amountInput && currencySelect) {
-            amountInput.addEventListener('input', updateShmAmount);
-            currencySelect.addEventListener('change', updateShmAmount);
-        }
-        if (document.getElementById('shmAmount')) {
-            console.log('On add-expense page: Fetching SHM price early');
-            await fetchShmPrice();
-        }
+        if (groupSelect) groupSelect.addEventListener('change', toggleGroupCreation);
+        const addMemberButton = document.getElementById('addMember');
+        if (addMemberButton) addMemberButton.addEventListener('click', addMemberField);
     }
-    await checkMetaMaskConnection();
+    const metamaskButton = document.querySelector('.metamask-button');
+    if (metamaskButton) {
+        metamaskButton.addEventListener('click', handleMetaMaskToggle);
+    }
+    if (document.getElementById('amount') && document.getElementById('currency')) {
+        document.getElementById('amount').addEventListener('input', updateShmAmount);
+        document.getElementById('currency').addEventListener('change', updateShmAmount);
+        fetchShmPrice();
+    }
 });

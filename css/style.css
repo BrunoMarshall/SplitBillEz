@@ -338,7 +338,53 @@ footer p {
     font-size: 14px;
 }
 
+/* Edit Name Button */
+.edit-name-button {
+    background-color: transparent;
+    border: none;
+    color: #007bff;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 5px;
+    vertical-align: middle;
+}
 
+.edit-name-button:hover {
+    color: #0056b3;
+}
 
+/* Edit Group Name Button */
+.edit-group-name-button {
+    background-color: transparent;
+    border: none;
+    color: #007bff;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 5px;
+    vertical-align: middle;
+}
 
+.edit-group-name-button:hover {
+    color: #0056b3;
+}
 
+/* Toggle Settled Groups Button */
+.toggle-settled-button {
+    background-color: #6c757d;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    cursor: pointer;
+    border-radius: 4px;
+    margin-bottom: 10px;
+}
+
+.toggle-settled-button:hover {
+    background-color: #5a6268;
+}
+
+/* Settled Group */
+.settled-group {
+    opacity: 0.6;
+    background-color: #f8f9fa;
+}
