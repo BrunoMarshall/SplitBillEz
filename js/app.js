@@ -328,11 +328,15 @@ async function disconnectWallet() {
         shmPrice = null;
         await updateUI();
         console.log('Wallet disconnected');
-        if (document.getElementById('expenseForm')) {
-            toggleExpenseForm(false);
+        const expenseForm = document.getElementById('expenseForm');
+        const createGroupForm = document.getElementById('createGroupForm');
+        if (expenseForm) {
+            expenseForm.style.display = 'none';
+            console.log('Hiding expenseForm on disconnect');
         }
-        if (document.getElementById('createGroupForm')) {
-            document.getElementById('createGroupForm').style.display = 'none';
+        if (createGroupForm) {
+            createGroupForm.style.display = 'none';
+            console.log('Hiding createGroupForm on disconnect');
         }
     } catch (error) {
         console.error('Error disconnecting wallet:', error);
@@ -556,8 +560,8 @@ async function checkMetaMaskConnection() {
             } else if (document.getElementById('expenseMessage')) {
                 document.getElementById('expenseMessage').innerHTML = message;
                 document.getElementById('expenseMessage').classList.add('success');
+                toggleForms(false, false);
             }
-            toggleExpenseForm(false);
             return;
         }
         console.log('MetaMask provider detected');
@@ -583,7 +587,7 @@ async function checkMetaMaskConnection() {
             } else if (document.getElementById('expenseMessage')) {
                 document.getElementById('expenseMessage').textContent = 'Please connect MetaMask to load groups.';
                 document.getElementById('expenseMessage').classList.add('success');
-                toggleExpenseForm(false);
+                toggleForms(false, false);
             }
         }
     } catch (error) {
@@ -595,7 +599,7 @@ async function checkMetaMaskConnection() {
             document.getElementById('expenseMessage').textContent = message;
             document.getElementById('expenseMessage').classList.add('success');
         }
-        toggleExpenseForm(false);
+        toggleForms(false, false);
     }
 }
 
@@ -645,36 +649,43 @@ async function initializeCreateGroupForm() {
         userAddressInput.value = '';
         console.warn('No account connected for createGroupForm initialization');
     }
-    createGroupForm.style.display = 'none'; // Ensure form is hidden by default
+    // Do not show createGroupForm here; handled by populateGroupDropdown
 }
 
-async function toggleExpenseForm(enable) {
+async function toggleForms(showExpenseForm, showCreateGroupForm) {
     const expenseForm = document.getElementById('expenseForm');
-    const submitButton = document.getElementById('submitExpenseButton');
-    if (!expenseForm || !submitButton) return;
-    console.log('Toggling expense form, enable:', enable);
-    if (enable) {
-        expenseForm.classList.remove('disabled-form');
-        submitButton.textContent = 'Add Expense';
-        submitButton.disabled = false;
-    } else {
-        expenseForm.classList.add('disabled-form');
-        submitButton.textContent = 'Add Expense (Select Group)';
-        submitButton.disabled = true;
+    const createGroupForm = document.getElementById('createGroupForm');
+    const submitExpenseButton = document.getElementById('submitExpenseButton');
+    const expenseMessage = document.getElementById('expenseMessage');
+
+    if (!expenseForm || !createGroupForm || !submitExpenseButton || !expenseMessage) {
+        console.error('Required form elements not found');
+        return;
     }
+
+    console.log('Toggling forms: showExpenseForm=', showExpenseForm, 'showCreateGroupForm=', showCreateGroupForm);
+    expenseForm.style.display = showExpenseForm ? 'flex' : 'none';
+    createGroupForm.style.display = showCreateGroupForm ? 'flex' : 'none';
+    submitExpenseButton.disabled = !showExpenseForm;
+    submitExpenseButton.textContent = showExpenseForm ? 'Add Expense' : 'Add Expense (Select Group)';
+    expenseMessage.textContent = showCreateGroupForm ? 'No groups found. Please create a new group below.' : '';
+    expenseMessage.classList.toggle('success', showCreateGroupForm);
 }
 
 async function populateGroupDropdown() {
     const groupSelect = document.getElementById('groupId');
     const expenseMessage = document.getElementById('expenseMessage');
-    if (!groupSelect || !expenseMessage) return;
+    if (!groupSelect || !expenseMessage) {
+        console.error('groupSelect or expenseMessage not found');
+        return;
+    }
 
     groupSelect.innerHTML = '<option value="" disabled selected>Loading groups...</option>';
     try {
         const account = await getAccount();
         if (!account) {
             groupSelect.innerHTML = '<option value="" disabled selected>Connect MetaMask to load groups</option>';
-            toggleExpenseForm(false);
+            toggleForms(false, false);
             expenseMessage.textContent = 'Please connect MetaMask to load groups.';
             expenseMessage.classList.add('success');
             return;
@@ -683,7 +694,7 @@ async function populateGroupDropdown() {
         const contractInstance = await getContract();
         if (!contractInstance) {
             groupSelect.innerHTML = '<option value="" disabled selected>Error loading contract</option>';
-            toggleExpenseForm(false);
+            toggleForms(false, false);
             expenseMessage.textContent = 'Error: Unable to connect to blockchain contract. Please check your MetaMask connection.';
             expenseMessage.classList.add('success');
             return;
@@ -706,9 +717,9 @@ async function populateGroupDropdown() {
 
         groupSelect.innerHTML = '';
         if (groups.length === 0) {
-            groupSelect.innerHTML = '<option value="" disabled selected>No groups found</option><option value="create">Create a new group</option>';
-            toggleExpenseForm(false);
-            expenseMessage.textContent = 'No groups found. Please create a new group.';
+            groupSelect.innerHTML = '<option value="create" selected>Create a new group</option>';
+            toggleForms(false, true);
+            expenseMessage.textContent = 'No groups found. Please create a new group below.';
             expenseMessage.classList.add('success');
         } else {
             groups.forEach(group => {
@@ -721,14 +732,14 @@ async function populateGroupDropdown() {
             createOption.value = 'create';
             createOption.textContent = 'Create a new group';
             groupSelect.appendChild(createOption);
-            toggleExpenseForm(true);
+            toggleForms(true, false);
             expenseMessage.textContent = '';
             expenseMessage.classList.remove('success');
         }
     } catch (error) {
         console.error('Error populating group dropdown:', error);
         groupSelect.innerHTML = '<option value="" disabled selected>Error loading groups</option>';
-        toggleExpenseForm(false);
+        toggleForms(false, false);
         expenseMessage.textContent = 'Error loading groups: ' + error.message;
         expenseMessage.classList.add('success');
     }
@@ -736,26 +747,23 @@ async function populateGroupDropdown() {
 
 async function toggleGroupCreation() {
     const groupId = document.getElementById('groupId')?.value;
-    const createGroupForm = document.getElementById('createGroupForm');
     const expenseMessage = document.getElementById('expenseMessage');
-    if (!createGroupForm || !expenseMessage) {
-        console.error('createGroupForm or expenseMessage not found');
+    if (!expenseMessage) {
+        console.error('expenseMessage not found');
         return;
     }
 
     console.log('toggleGroupCreation called, groupId:', groupId);
     if (groupId === 'create') {
-        createGroupForm.style.display = 'block';
-        toggleExpenseForm(false);
+        toggleForms(false, true);
         expenseMessage.textContent = 'Please fill out the group creation form below.';
         expenseMessage.classList.add('success');
-        console.log('Showing createGroupForm');
+        console.log('Showing createGroupForm, hiding expenseForm');
     } else {
-        createGroupForm.style.display = 'none';
-        toggleExpenseForm(groupId !== '' && groupId !== 'create');
+        toggleForms(groupId !== '' && groupId !== 'create', false);
         expenseMessage.textContent = groupId ? '' : 'Please select a group to add an expense.';
         expenseMessage.classList.remove('success');
-        console.log('Hiding createGroupForm, expense form enabled:', groupId !== '' && groupId !== 'create');
+        console.log('Showing expenseForm, hiding createGroupForm, groupId:', groupId);
     }
 }
 
