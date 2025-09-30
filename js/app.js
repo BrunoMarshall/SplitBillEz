@@ -446,7 +446,7 @@ async function checkMetaMaskConnection() {
         }
         const account = await getAccount();
         console.log('MetaMask connected on load:', account);
-1965        if (account) {
+        if (account) {
             if (document.getElementById('userAddress')) {
                 document.getElementById('userAddress').value = account;
                 await populateGroupDropdown();
@@ -1327,10 +1327,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             amountInput.addEventListener('input', updateShmAmount);
             currencySelect.addEventListener('change', updateShmAmount);
         }
-        if (document.getElementById('shmAmount')) {
-            console.log('On add-expense page: Fetching SHM price early');
-            await fetchShmPrice();
-        }
+        await fetchShmPrice();
     }
     await checkMetaMaskConnection();
 });
