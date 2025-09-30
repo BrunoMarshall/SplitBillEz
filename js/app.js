@@ -724,26 +724,37 @@ async function toggleGroupCreation() {
     if (groupId === 'create') {
         groupCreation.style.display = 'block';
         toggleExpenseForm(false);
-        groupSelect.removeAttribute('required'); // Remove required for group creation
+        groupSelect.removeAttribute('required'); // Remove required attribute
+        console.log('Required attribute removed from groupId:', !groupSelect.hasAttribute('required')); // Debug
     } else {
         groupCreation.style.display = 'none';
         toggleExpenseForm(true);
-        groupSelect.setAttribute('required', ''); // Restore required for expense addition
+        groupSelect.setAttribute('required', ''); // Restore required attribute
+        console.log('Required attribute restored on groupId:', groupSelect.hasAttribute('required')); // Debug
     }
 }
 
 async function handleExpenseFormSubmit(e) {
-    e.preventDefault();
+    e.preventDefault(); // Prevent default form submission
+    e.stopPropagation(); // Stop event propagation to prevent browser validation
     const form = e.target;
     const groupId = document.getElementById('groupId')?.value;
     const expenseMessage = document.getElementById('expenseMessage');
-    if (!expenseMessage) return;
+    const groupSelect = document.getElementById('groupId');
+    if (!expenseMessage || !groupSelect) return;
+
+    // Log groupId and required state for debugging
+    console.log('Form submitted with groupId:', groupId, 'Required:', groupSelect.hasAttribute('required'));
 
     // Bypass browser validation for group creation
     if (groupId === 'create') {
         form.noValidate = true;
+        groupSelect.removeAttribute('required'); // Ensure required is removed
+        console.log('Validation bypassed for group creation, required removed:', !groupSelect.hasAttribute('required'));
     } else {
         form.noValidate = false;
+        groupSelect.setAttribute('required', ''); // Ensure required is set for expense
+        console.log('Validation enabled for expense addition, required set:', groupSelect.hasAttribute('required'));
     }
 
     try {
@@ -796,7 +807,7 @@ async function handleExpenseFormSubmit(e) {
                 toggleGroupCreation();
             }, 3000);
         } else {
-            if (!groupId) {
+            if (!groupId || groupId === '') {
                 expenseMessage.textContent = 'Please select a valid group to add an expense.';
                 expenseMessage.classList.add('success');
                 return;
