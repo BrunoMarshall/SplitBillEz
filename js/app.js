@@ -1139,7 +1139,7 @@ async function calculateContributionBreakdown(groupId, members, expenses) {
     }
 }
 
-async getDebtAmount(groupId, toAddress) {
+async function getDebtAmount(groupId, toAddress) {
     try {
         const userAddress = await getAccount();
         const balanceData = await getContract().methods.getGroupBalances(groupId).call();
