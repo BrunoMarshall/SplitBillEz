@@ -44,10 +44,22 @@ async function handleMetaMaskToggle() {
         await disconnectWallet();
     } else {
         await initWeb3();
+        
+        const acc = await getAccount();
+        if (acc) {
+            const userAddressFields = document.querySelectorAll('.user-address, #userAddress');
+            userAddressFields.forEach(field => {
+                field.value = acc;
+                field.placeholder = acc;
+            });
+        }
+        
         if (document.getElementById('groupId')) {
             await populateGroupDropdown();
         } else if (document.getElementById('dashboardContent')) {
             await populateDashboard();
+        } else if (document.getElementById('groupsContent')) {
+            await populateGroupsList();
         }
     }
 }
@@ -114,10 +126,19 @@ async function checkMetaMaskConnection() {
     if (!web3) await initWeb3();
     const acc = await getAccount();
     if (acc) {
-        if (document.getElementById('userAddress')) {
-            document.getElementById('userAddress').value = acc;
+        const userAddressFields = document.querySelectorAll('.user-address, #userAddress');
+        userAddressFields.forEach(field => {
+            field.value = acc;
+            field.placeholder = acc;
+        });
+        
+        if (document.getElementById('groupId')) {
             await populateGroupDropdown();
-        } else if (document.getElementById('dashboardContent')) {
+        }
+        if (document.getElementById('groupsContent')) {
+            await populateGroupsList();
+        }
+        if (document.getElementById('dashboardContent')) {
             await populateDashboard();
         }
     }
@@ -172,7 +193,7 @@ async function populateDashboard() {
         }
         
         if (gids.size === 0) {
-            dc.innerHTML = '<p>No groups. Create one in <a href="add-expense.html">Add Expense</a>.</p>';
+            dc.innerHTML = '<p>No groups. Create one in <a href="groups.html">Groups</a>.</p>';
             return;
         }
         
@@ -382,39 +403,77 @@ function updateShmAmount() {
     sa.textContent = `SHM Amount: ${(c === 'shm' ? a : a / shmPrice[c]).toFixed(4)} SHM`;
 }
 
-function updateExpenseFormUI(hasGroups) {
-    const gss = document.getElementById('groupSelectionSection');
-    const eds = document.getElementById('expenseDetailsSection');
-    const gcd = document.getElementById('groupCreation');
-    const pt = document.getElementById('pageTitle');
-    const sb = document.getElementById('submitButton');
-    
-    if (!hasGroups) {
-        if (gss) gss.style.display = 'none';
-        if (eds) eds.style.display = 'none';
-        if (gcd) gcd.style.display = 'block';
-        if (pt) pt.textContent = 'Create Your First Group';
-        if (sb) sb.textContent = 'Create Group';
-    } else {
-        if (gss) gss.style.display = 'block';
-        if (pt) pt.textContent = 'Add a New Expense';
-    }
-}
-
-async function populateGroupDropdown() {
-    const gs = document.getElementById('groupId'), gcd = document.getElementById('groupCreation'), sb = document.getElementById('submitButton');
-    const eds = document.getElementById('expenseDetailsSection');
-    if (!gs) return;
-    gs.innerHTML = '<option value="">Loading...</option>';
+async function populateGroupsList() {
+    const gc = document.getElementById('groupsContent');
+    if (!gc) return;
+    gc.innerHTML = '<p>Loading...</p>';
     if (!web3 || !contract || !userAccount) {
-        gs.innerHTML = '<option value="">Connect wallet</option>';
-        if (gcd) gcd.style.display = 'none';
-        if (eds) eds.style.display = 'none';
+        gc.innerHTML = '<p>Connect MetaMask to view groups.</p>';
         return;
     }
     try {
         const user = await getAccount();
-        document.getElementById('userAddress').value = user;
+        const groupCount = parseInt(await contract.methods.groupCount().call()) || 0;
+        const gids = new Set();
+        
+        for (let i = 0; i < Math.min(groupCount, 50); i++) {
+            try {
+                const gid = await contract.methods.userGroups(user, i).call();
+                if (gid && parseInt(gid) > 0) gids.add(gid.toString());
+            } catch (e) {
+                if (e.message.includes('reverted')) break;
+            }
+        }
+        
+        for (let i = 1; i <= groupCount; i++) {
+            try {
+                const r = await contract.methods.getGroup(i).call();
+                const ms = r.members || r[1] || [];
+                if (ms.map(a => a.toLowerCase()).includes(user.toLowerCase())) gids.add(i.toString());
+            } catch {}
+        }
+        
+        if (gids.size === 0) {
+            gc.innerHTML = '<p>No groups yet. Create one above!</p>';
+            return;
+        }
+        
+        gc.innerHTML = '';
+        for (let gid of gids) {
+            try {
+                const r = await contract.methods.getGroup(gid).call();
+                const name = r.name || r[0] || 'Unnamed';
+                const mems = r.members || r[1] || [];
+                
+                const groupDiv = document.createElement('div');
+                groupDiv.className = 'group';
+                groupDiv.innerHTML = `
+                    <h4>${name} (ID: ${gid})</h4>
+                    <p><strong>Members:</strong> ${mems.length}</p>
+                    <ul>
+                        ${mems.map(m => `<li>${getMemberName(m)} (${truncateAddress(m)})</li>`).join('')}
+                    </ul>
+                `;
+                gc.appendChild(groupDiv);
+            } catch (e) {
+                console.error('Error loading group:', e);
+            }
+        }
+    } catch (e) {
+        gc.innerHTML = '<p>Error loading groups.</p>';
+    }
+}
+
+async function populateGroupDropdown() {
+    const gs = document.getElementById('groupId');
+    if (!gs) return;
+    gs.innerHTML = '<option value="">Loading...</option>';
+    if (!web3 || !contract || !userAccount) {
+        gs.innerHTML = '<option value="">Connect wallet</option>';
+        return;
+    }
+    try {
+        const user = await getAccount();
         const gc = parseInt(await contract.methods.groupCount().call()) || 0;
         const gids = new Set();
         
@@ -437,9 +496,8 @@ async function populateGroupDropdown() {
         
         gs.innerHTML = '<option value="">Select a group</option>';
         if (gids.size === 0) {
-            updateExpenseFormUI(false);
+            gs.innerHTML += '<option value="" disabled>No groups - create one in Groups page</option>';
         } else {
-            updateExpenseFormUI(true);
             for (let g of gids) {
                 try {
                     const r = await contract.methods.getGroup(g).call();
@@ -450,14 +508,9 @@ async function populateGroupDropdown() {
                     gs.appendChild(o);
                 } catch {}
             }
-            gs.innerHTML += '<option value="create">+ Create new group</option>';
-            if (gcd) gcd.style.display = 'none';
-            if (eds) eds.style.display = 'none';
-            if (sb) sb.textContent = 'Add Expense';
         }
     } catch {
-        gs.innerHTML = '<option value="">Error</option><option value="create">Create new</option>';
-        updateExpenseFormUI(false);
+        gs.innerHTML = '<option value="">Error loading groups</option>';
     }
 }
 
@@ -470,23 +523,12 @@ function toggleCustomShares() {
     }
 }
 
-function toggleGroupCreation() {
-    const gs = document.getElementById('groupId'), gcd = document.getElementById('groupCreation'), sb = document.getElementById('submitButton');
-    const eds = document.getElementById('expenseDetailsSection');
-    if (gs && gcd && sb) {
-        const isCreate = gs.value === 'create';
-        gcd.style.display = isCreate ? 'block' : 'none';
-        if (eds) eds.style.display = isCreate ? 'none' : 'block';
-        sb.textContent = isCreate ? 'Create Group' : 'Add Expense';
-    }
-}
-
 function addMemberField() {
     const mi = document.getElementById('memberInputs');
     if (!mi || mi.children.length >= 10) return;
     const d = document.createElement('div');
     d.className = 'member-input';
-    d.innerHTML = '<input type="text" class="member-name" placeholder="Name"><input type="text" class="member-address" placeholder="0x..."><button type="button" class="remove-member">Remove</button>';
+    d.innerHTML = '<input type="text" class="member-name" placeholder="Name" required><input type="text" class="member-address" placeholder="0x..." required><button type="button" class="remove-member">Remove</button>';
     mi.appendChild(d);
     d.querySelector('.remove-member').addEventListener('click', () => removeMember(d.querySelector('.remove-member')));
 }
@@ -496,6 +538,60 @@ function removeMember(btn) {
     if (mi && mi.children.length > 2) btn.parentElement.remove();
 }
 
+async function handleCreateGroupSubmit(e) {
+    e.preventDefault();
+    const gm = document.getElementById('groupMessage');
+    if (!web3 || !contract || !userAccount) {
+        gm.textContent = 'Connect MetaMask first.';
+        return;
+    }
+    
+    const gn = document.getElementById('groupName')?.value;
+    const mis = document.getElementsByClassName('member-input');
+    if (!gn) {
+        gm.textContent = 'Enter group name.';
+        return;
+    }
+    
+    const mems = [], names = {};
+    const user = (await getAccount()).toLowerCase();
+    for (let mi of mis) {
+        const a = mi.querySelector('.member-address')?.value?.trim().toLowerCase();
+        const n = mi.querySelector('.member-name')?.value?.trim();
+        if (a && web3.utils.isAddress(a)) {
+            mems.push(a);
+            if (n && n !== 'Me') names[a] = n;
+        }
+    }
+    
+    if (mems.length < 2) {
+        gm.textContent = 'Need at least 2 members.';
+        return;
+    }
+    if (!mems.includes(user)) {
+        gm.textContent = 'Your address missing.';
+        return;
+    }
+    
+    const en = JSON.parse(localStorage.getItem('memberNames') || '{}');
+    localStorage.setItem('memberNames', JSON.stringify(Object.assign({}, en, names)));
+    
+    try {
+        const tx = await contract.methods.createGroup(gn, mems).send({
+            from: await getAccount(),
+            value: '0',
+            gasPrice: web3.utils.toWei('50', 'gwei')
+        });
+        gm.innerHTML = `<strong>Group created!</strong> <a href="https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}" target="_blank">View TX</a>`;
+        setTimeout(() => {
+            e.target.reset();
+            populateGroupsList();
+        }, 2000);
+    } catch (err) {
+        gm.textContent = 'Error: ' + err.message;
+    }
+}
+
 async function handleExpenseFormSubmit(e) {
     e.preventDefault();
     const em = document.getElementById('expenseMessage');
@@ -503,51 +599,10 @@ async function handleExpenseFormSubmit(e) {
         em.textContent = 'Connect MetaMask first.';
         return;
     }
-    const gid = document.getElementById('groupId')?.value, sb = document.getElementById('submitButton'), gcd = document.getElementById('groupCreation');
     
-    if (gid === 'create' || !gid) {
-        const gn = document.getElementById('groupName')?.value;
-        const mis = document.getElementsByClassName('member-input');
-        if (!gn) {
-            em.textContent = 'Enter group name.';
-            return;
-        }
-        const mems = [], names = {};
-        const user = (await getAccount()).toLowerCase();
-        for (let mi of mis) {
-            const a = mi.querySelector('.member-address')?.value?.trim().toLowerCase();
-            const n = mi.querySelector('.member-name')?.value?.trim();
-            if (a && web3.utils.isAddress(a)) {
-                mems.push(a);
-                if (n && n !== 'Me') names[a] = n;
-            }
-        }
-        if (mems.length < 2) {
-            em.textContent = 'Need at least 2 members.';
-            return;
-        }
-        if (!mems.includes(user)) {
-            em.textContent = 'Your address missing.';
-            return;
-        }
-        const en = JSON.parse(localStorage.getItem('memberNames') || '{}');
-        localStorage.setItem('memberNames', JSON.stringify(Object.assign({}, en, names)));
-        try {
-            const tx = await contract.methods.createGroup(gn, mems).send({
-                from: await getAccount(),
-                value: '0',
-                gasPrice: web3.utils.toWei('50', 'gwei')
-            });
-            em.innerHTML = `<strong>Group created!</strong> <a href="https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}" target="_blank">View TX</a>`;
-            setTimeout(() => {
-                if (gcd) gcd.style.display = 'none';
-                if (sb) sb.textContent = 'Add Expense';
-                e.target.reset();
-                populateGroupDropdown();
-            }, 3000);
-        } catch (err) {
-            em.textContent = 'Error: ' + err.message;
-        }
+    const gid = document.getElementById('groupId')?.value;
+    if (!gid) {
+        em.textContent = 'Please select a group.';
         return;
     }
     
@@ -555,6 +610,7 @@ async function handleExpenseFormSubmit(e) {
     const ai = document.getElementById('amount')?.value;
     const curr = document.getElementById('currency')?.value;
     let amt;
+    
     try {
         const sa = curr.toLowerCase() === 'shm' ? parseFloat(ai) : parseFloat(ai) / shmPrice[curr.toLowerCase()];
         amt = web3.utils.toWei(sa.toFixed(18), 'ether');
@@ -562,6 +618,7 @@ async function handleExpenseFormSubmit(e) {
         em.textContent = 'Invalid amount.';
         return;
     }
+    
     const st = document.getElementById('split')?.value;
     let cs = [];
     if (st === 'custom') {
@@ -582,6 +639,7 @@ async function handleExpenseFormSubmit(e) {
             return;
         }
     }
+    
     try {
         const tx = await contract.methods.addExpense(gid, desc, amt, st, cs).send({
             from: await getAccount(),
@@ -591,8 +649,8 @@ async function handleExpenseFormSubmit(e) {
         em.innerHTML = `<strong>Expense added!</strong> <a href="https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}" target="_blank">View TX</a>`;
         setTimeout(() => {
             e.target.reset();
-            populateDashboard();
-        }, 3000);
+            window.location.href = 'dashboard.html';
+        }, 2000);
     } catch (err) {
         em.textContent = 'Error: ' + err.message;
     }
@@ -614,16 +672,21 @@ async function getAccount() {
 
 document.addEventListener('DOMContentLoaded', async () => {
     document.querySelector('.metamask-button')?.addEventListener('click', handleMetaMaskToggle);
+    
     const ef = document.getElementById('expenseForm');
     if (ef) {
         ef.addEventListener('submit', handleExpenseFormSubmit);
         document.getElementById('split')?.addEventListener('change', toggleCustomShares);
-        document.getElementById('groupId')?.addEventListener('change', toggleGroupCreation);
-        document.getElementById('addMemberButton')?.addEventListener('click', addMemberField);
         document.getElementById('amount')?.addEventListener('input', updateShmAmount);
         document.getElementById('currency')?.addEventListener('change', updateShmAmount);
         await fetchShmPrice();
     }
+    
+    const cgf = document.getElementById('createGroupForm');
+    if (cgf) {
+        cgf.addEventListener('submit', handleCreateGroupSubmit);
+        document.getElementById('addMemberButton')?.addEventListener('click', addMemberField);
+    }
+    
     await checkMetaMaskConnection();
 });
-

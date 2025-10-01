@@ -424,3 +424,11 @@ footer p {
     background-color: #f0f0f0;
     opacity: 0.8;
 }
+
+.create-group-button {
+    background-color: #28a745 !important;
+}
+
+.create-group-button:hover {
+    background-color: #218838 !important;
+}

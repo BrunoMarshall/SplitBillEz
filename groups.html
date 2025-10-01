@@ -32,8 +32,6 @@
             <div id="groupCreationSection">
                 <h3>Create a New Group</h3>
                 <form id="createGroupForm">
-                    <input type="hidden" id="userAddress">
-                    
                     <label for="groupName">Group Name:</label>
                     <input type="text" id="groupName" placeholder="e.g., Friends Trip" required>
                     
@@ -42,7 +40,7 @@
                         <div class="member-input">
                             <span class="member-label">You:</span>
                             <input type="text" class="member-name" placeholder="Your Name" value="Me" readonly>
-                            <input type="text" class="member-address" value="Your wallet address" readonly>
+                            <input type="text" class="member-address user-address" placeholder="Connecting..." readonly>
                             <button type="button" class="remove-member" style="display: none;">Remove</button>
                         </div>
                         <div class="member-input">
@@ -53,7 +51,7 @@
                         </div>
                     </div>
                     <button type="button" id="addMemberButton">Add Member</button>
-                    <button type="submit" class="submit-button">Create Group</button>
+                    <button type="submit" class="submit-button create-group-button">Create Group</button>
                 </form>
                 <p id="groupMessage"></p>
             </div>
