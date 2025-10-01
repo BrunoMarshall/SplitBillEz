@@ -16,75 +16,48 @@
             <img src="images/splitbillez_logo.svg" alt="SplitBillEz Logo" class="logo">
             <nav>
                 <a href="index.html">Home</a>
-                <a href="dashboard.html">Dashboard</a>
+                <a href="groups.html">Groups</a>
                 <a href="add-expense.html">Add Expense</a>
+                <a href="dashboard.html">Dashboard</a>
+                <a href="split-token.html">SPLIT Token</a>
             </nav>
             <button class="metamask-button">Connect with MetaMask</button>
         </div>
     </header>
     <main>
         <section>
-            <h2 id="pageTitle">Add a New Expense</h2>
+            <h2>Add a New Expense</h2>
             <form id="expenseForm">
                 <input type="hidden" id="userAddress">
                 
-                <!-- Group Selection Section -->
-                <div id="groupSelectionSection">
-                    <label for="groupId">Select Group:</label>
-                    <select id="groupId">
-                        <option value="" disabled selected>Loading groups...</option>
-                    </select>
-                </div>
-
-                <!-- Group Creation Section (Hidden by default) -->
-                <div id="groupCreation" style="display: none;">
-                    <h3>Create a New Group</h3>
-                    <label for="groupName">Group Name:</label>
-                    <input type="text" id="groupName" placeholder="e.g., Friends Trip">
-                    <label>Members:</label>
-                    <div id="memberInputs">
-                        <div class="member-input">
-                            <span class="member-label">You:</span>
-                            <input type="text" class="member-name" placeholder="Your Name" value="Me" readonly>
-                            <input type="text" class="member-address" value="Your wallet address" readonly>
-                            <button type="button" class="remove-member" style="display: none;">Remove</button>
-                        </div>
-                        <div class="member-input">
-                            <span class="member-label">Member 1:</span>
-                            <input type="text" class="member-name" placeholder="Member Name">
-                            <input type="text" class="member-address" placeholder="e.g., 0x742d...">
-                            <button type="button" class="remove-member">Remove</button>
-                        </div>
-                    </div>
-                    <button type="button" id="addMemberButton">Add Member</button>
-                </div>
-
-                <!-- Expense Details Section (Hidden when creating group) -->
-                <div id="expenseDetailsSection" style="display: none;">
-                    <label for="description">Expense Description:</label>
-                    <input type="text" id="description" placeholder="e.g., Dinner at Restaurant">
-                    
-                    <label for="amount">Amount:</label>
-                    <input type="number" id="amount" placeholder="Enter amount" step="0.01">
-                    
-                    <label for="currency">Currency:</label>
-                    <select id="currency">
-                        <option value="usd">USD</option>
-                        <option value="eur">EUR</option>
-                        <option value="inr">INR</option>
-                        <option value="shm">SHM</option>
-                    </select>
-                    <p id="shmAmount">SHM Amount: Enter amount to calculate</p>
-                    
-                    <label for="split">Split Type:</label>
-                    <select id="split">
-                        <option value="equal">Equal</option>
-                        <option value="custom">Custom</option>
-                    </select>
-                    
-                    <label for="customShares" id="customLabel" style="display: none;">Custom Shares (%):</label>
-                    <input type="text" id="customShares" placeholder="e.g., 20,30,50" style="display: none;">
-                </div>
+                <label for="groupId">Select Group:</label>
+                <select id="groupId" required>
+                    <option value="" disabled selected>Loading groups...</option>
+                </select>
+                
+                <label for="description">Expense Description:</label>
+                <input type="text" id="description" placeholder="e.g., Dinner at Restaurant" required>
+                
+                <label for="amount">Amount:</label>
+                <input type="number" id="amount" placeholder="Enter amount" step="0.01" required>
+                
+                <label for="currency">Currency:</label>
+                <select id="currency" required>
+                    <option value="usd">USD</option>
+                    <option value="eur">EUR</option>
+                    <option value="inr">INR</option>
+                    <option value="shm">SHM</option>
+                </select>
+                <p id="shmAmount">SHM Amount: Enter amount to calculate</p>
+                
+                <label for="split">Split Type:</label>
+                <select id="split" required>
+                    <option value="equal">Equal</option>
+                    <option value="custom">Custom</option>
+                </select>
+                
+                <label for="customShares" id="customLabel" style="display: none;">Custom Shares (%):</label>
+                <input type="text" id="customShares" placeholder="e.g., 20,30,50" style="display: none;">
 
                 <button type="submit" id="submitButton" class="submit-button">Add Expense</button>
             </form>

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Groups - SplitBillEz</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" href="images/splitbillez_favicon.png">
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js" defer></script>
+    <script src="js/ethereum-blockies-base64.min.js" defer></script>
+    <script src="js/app.js" defer></script>
+</head>
+<body>
+    <header>
+        <div class="header-container">
+            <img src="images/splitbillez_logo.svg" alt="SplitBillEz Logo" class="logo">
+            <nav>
+                <a href="index.html">Home</a>
+                <a href="groups.html">Groups</a>
+                <a href="add-expense.html">Add Expense</a>
+                <a href="dashboard.html">Dashboard</a>
+                <a href="split-token.html">SPLIT Token</a>
+            </nav>
+            <button class="metamask-button">Connect with MetaMask</button>
+        </div>
+    </header>
+    <main>
+        <section>
+            <h2>Manage Groups</h2>
+            
+            <!-- Create New Group Section -->
+            <div id="groupCreationSection">
+                <h3>Create a New Group</h3>
+                <form id="createGroupForm">
+                    <input type="hidden" id="userAddress">
+                    
+                    <label for="groupName">Group Name:</label>
+                    <input type="text" id="groupName" placeholder="e.g., Friends Trip" required>
+                    
+                    <label>Members:</label>
+                    <div id="memberInputs">
+                        <div class="member-input">
+                            <span class="member-label">You:</span>
+                            <input type="text" class="member-name" placeholder="Your Name" value="Me" readonly>
+                            <input type="text" class="member-address" value="Your wallet address" readonly>
+                            <button type="button" class="remove-member" style="display: none;">Remove</button>
+                        </div>
+                        <div class="member-input">
+                            <span class="member-label">Member 1:</span>
+                            <input type="text" class="member-name" placeholder="Member Name" required>
+                            <input type="text" class="member-address" placeholder="e.g., 0x742d..." required>
+                            <button type="button" class="remove-member">Remove</button>
+                        </div>
+                    </div>
+                    <button type="button" id="addMemberButton">Add Member</button>
+                    <button type="submit" class="submit-button">Create Group</button>
+                </form>
+                <p id="groupMessage"></p>
+            </div>
+
+            <!-- Existing Groups List -->
+            <div id="groupsList">
+                <h3>Your Groups</h3>
+                <div id="groupsContent">Loading groups...</div>
+            </div>
+        </section>
+    </main>
+    <footer>
+        <p>© 2025 SplitBillEz Powered by Shardeum</p>
+        <div class="social-links">
+            <a href="https://discord.com/invite/shardeum" target="_blank" rel="nofollow">
+                <img src="images/discord.svg" alt="Discord" class="social-icon">
+            </a>
+            <a href="https://github.com/BrunoMarshall/SplitBillEz" target="_blank" rel="nofollow">
+                <img src="images/github.svg" alt="GitHub" class="social-icon">
+            </a>
+            <a href="https://www.linkedin.com/company/shardeum/" target="_blank" rel="nofollow">
+                <img src="images/linkedin.svg" alt="LinkedIn" class="social-icon">
+            </a>
+            <a href="https://t.me/shardeum" target="_blank" rel="nofollow">
+                <img src="images/telegram.svg" alt="Telegram" class="social-icon">
+            </a>
+            <a href="https://x.com/shardeum" target="_blank" rel="nofollow">
+                <img src="images/twitter.svg" alt="X" class="social-icon">
+            </a>
+            <a href="https://www.youtube.com/@shardeum" target="_blank" rel="nofollow">
+                <img src="images/youtube.svg" alt="YouTube" class="social-icon">
+            </a>
+        </div>
+    </footer>
+</body>
+</html>
