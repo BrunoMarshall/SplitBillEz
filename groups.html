@@ -25,11 +25,14 @@
         </div>
     </header>
     <main>
-        <section>
-            <h2>Manage Groups</h2>
+        <section class="modern-section">
+            <div class="page-header">
+                <h2>Manage Groups</h2>
+                <p class="page-subtitle">Create and manage your expense sharing groups</p>
+            </div>
             
             <!-- Create New Group Section -->
-            <div id="groupCreationSection">
+            <div id="groupCreationSection" class="card">
                 <h3>Create a New Group</h3>
                 <form id="createGroupForm">
                     <label for="groupName">Group Name:</label>
@@ -38,26 +41,26 @@
                     <label>Members:</label>
                     <div id="memberInputs">
                         <div class="member-input">
-                            <span class="member-label">You:</span>
+                            <span class="member-label">Member 1 (You):</span>
                             <input type="text" class="member-name" placeholder="Your Name" value="Me" readonly>
                             <input type="text" class="member-address user-address" placeholder="Connecting..." readonly>
                             <button type="button" class="remove-member" style="display: none;">Remove</button>
                         </div>
                         <div class="member-input">
-                            <span class="member-label">Member 1:</span>
+                            <span class="member-label">Member 2:</span>
                             <input type="text" class="member-name" placeholder="Member Name" required>
                             <input type="text" class="member-address" placeholder="e.g., 0x742d..." required>
                             <button type="button" class="remove-member">Remove</button>
                         </div>
                     </div>
-                    <button type="button" id="addMemberButton">Add Member</button>
+                    <button type="button" id="addMemberButton">+ Add Member</button>
                     <button type="submit" class="submit-button create-group-button">Create Group</button>
                 </form>
                 <p id="groupMessage"></p>
             </div>
 
             <!-- Existing Groups List -->
-            <div id="groupsList">
+            <div id="groupsList" class="card">
                 <h3>Your Groups</h3>
                 <div id="groupsContent">Loading groups...</div>
             </div>

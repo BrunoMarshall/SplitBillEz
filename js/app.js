@@ -454,7 +454,6 @@ function updateShmAmount() {
     const c = cs.value.toLowerCase();
     sa.textContent = `SHM Amount: ${(c === 'shm' ? a : a / shmPrice[c]).toFixed(4)} SHM`;
 }
-
 async function populateGroupsList() {
     const gc = document.getElementById('groupsContent');
     if (!gc) return;
@@ -510,26 +509,75 @@ async function populateGroupsList() {
                 
                 const groupDiv = document.createElement('div');
                 groupDiv.className = isSettled ? 'group group-settled' : 'group';
-                groupDiv.innerHTML = `
-                    <div class="group-list-item">
-                        <img src="${gb}" class="group-avatar-small">
-                        <div class="group-info">
-                            <h4>${name} ${isSettled ? '<span class="settled-badge">✓ Settled</span>' : ''}</h4>
-                            <p><strong>ID:</strong> ${gid} | <strong>Members:</strong> ${mems.length}</p>
-                            <details>
-                                <summary>Show Members</summary>
-                                <ul class="members-list">
-                                    ${mems.map(m => `<li>${getMemberName(m)} (${truncateAddress(m)})</li>`).join('')}
-                                </ul>
-                            </details>
-                        </div>
-                    </div>
-                `;
                 
                 if (isSettled) {
+                    // Get transaction history for settled groups
+                    const eids = await contract.methods.getGroupExpenseIds(gid).call();
+                    const expenses = await Promise.all(eids.map(async eid => {
+                        try {
+                            const e = await contract.methods.getExpense(eid).call();
+                            return {
+                                description: e.description,
+                                amount: web3.utils.fromWei(e.amount || '0', 'ether'),
+                                payer: e.payer
+                            };
+                        } catch {
+                            return null;
+                        }
+                    }));
+                    
+                    groupDiv.innerHTML = `
+                        <div class="group-list-item">
+                            <img src="${gb}" class="group-avatar-small">
+                            <div class="group-info">
+                                <h4>${name} <span class="settled-badge">✓ Settled</span></h4>
+                                <p><strong>ID:</strong> ${gid} | <strong>Members:</strong> ${mems.length} | <strong>Expenses:</strong> ${expenses.filter(e => e).length}</p>
+                                <details class="group-history-details">
+                                    <summary>View Full History</summary>
+                                    <div class="history-content">
+                                        <h5>Members</h5>
+                                        <ul class="members-list">
+                                            ${mems.map(m => `<li>${getMemberName(m)} (${truncateAddress(m)})</li>`).join('')}
+                                        </ul>
+                                        <h5>Transaction History</h5>
+                                        <div class="transaction-history">
+                                            ${expenses.filter(e => e).map(e => `
+                                                <div class="transaction-item">
+                                                    <span class="transaction-desc">${e.description}</span>
+                                                    <span class="transaction-amount">${e.amount} SHM</span>
+                                                    <span class="transaction-payer">by ${getMemberName(e.payer)}</span>
+                                                </div>
+                                            `).join('') || '<p>No transaction history available</p>'}
+                                        </div>
+                                        <div class="settlement-info">
+                                            <p class="settlement-status">✓ All debts have been settled</p>
+                                            <a href="https://explorer-unstable.shardeum.org/address/${CONTRACT_ADDRESS}" target="_blank" class="explorer-link">
+                                                View on Explorer →
+                                            </a>
+                                        </div>
+                                    </div>
+                                </details>
+                            </div>
+                        </div>
+                    `;
                     settledDiv.appendChild(groupDiv);
                     hasSettled = true;
                 } else {
+                    groupDiv.innerHTML = `
+                        <div class="group-list-item">
+                            <img src="${gb}" class="group-avatar-small">
+                            <div class="group-info">
+                                <h4>${name}</h4>
+                                <p><strong>ID:</strong> ${gid} | <strong>Members:</strong> ${mems.length}</p>
+                                <details>
+                                    <summary>Show Members</summary>
+                                    <ul class="members-list">
+                                        ${mems.map(m => `<li>${getMemberName(m)} (${truncateAddress(m)})</li>`).join('')}
+                                    </ul>
+                                </details>
+                            </div>
+                        </div>
+                    `;
                     activeDiv.appendChild(groupDiv);
                     hasActive = true;
                 }
@@ -604,26 +652,42 @@ async function populateGroupDropdown() {
         gs.innerHTML = '<option value="">Error loading groups</option>';
     }
 }
-
 function toggleCustomShares() {
-    const s = document.getElementById('split'), c = document.getElementById('customShares'), l = document.getElementById('customLabel');
-    if (s && c && l) {
-        const sh = s.value === 'custom';
-        c.style.display = sh ? 'block' : 'none';
-        l.style.display = sh ? 'block' : 'none';
+    const s = document.getElementById('split');
+    const container = document.getElementById('customSharesContainer');
+    if (s && container) {
+        container.style.display = s.value === 'custom' ? 'block' : 'none';
     }
 }
-
 function addMemberField() {
     const mi = document.getElementById('memberInputs');
     if (!mi || mi.children.length >= 10) return;
+    const memberNumber = mi.children.length + 1;
     const d = document.createElement('div');
     d.className = 'member-input';
-    d.innerHTML = '<input type="text" class="member-name" placeholder="Name" required><input type="text" class="member-address" placeholder="0x..." required><button type="button" class="remove-member">Remove</button>';
+    d.innerHTML = `<span class="member-label">Member ${memberNumber}:</span><input type="text" class="member-name" placeholder="Member Name" required><input type="text" class="member-address" placeholder="0x..." required><button type="button" class="remove-member">Remove</button>`;
     mi.appendChild(d);
-    d.querySelector('.remove-member').addEventListener('click', () => removeMember(d.querySelector('.remove-member')));
+    d.querySelector('.remove-member').addEventListener('click', () => {
+        removeMember(d.querySelector('.remove-member'));
+        updateMemberNumbers();
+    });
 }
-
+// Add new function to update member numbers
+function updateMemberNumbers() {
+    const mi = document.getElementById('memberInputs');
+    if (!mi) return;
+    const memberInputs = mi.querySelectorAll('.member-input');
+    memberInputs.forEach((input, index) => {
+        const label = input.querySelector('.member-label');
+        if (label) {
+            if (index === 0) {
+                label.textContent = 'Member 1 (You):';
+            } else {
+                label.textContent = `Member ${index + 1}:`;
+            }
+        }
+    });
+}
 function removeMember(btn) {
     const mi = document.getElementById('memberInputs');
     if (mi && mi.children.length > 2) btn.parentElement.remove();
