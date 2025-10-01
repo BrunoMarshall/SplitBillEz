@@ -197,9 +197,20 @@ async function populateDashboard() {
             return;
         }
         
-        dc.innerHTML = '';
+        dc.innerHTML = '<div class="dashboard-summary"></div><div class="dashboard-groups"></div>';
+        const summaryDiv = dc.querySelector('.dashboard-summary');
+        const groupsDiv = dc.querySelector('.dashboard-groups');
+        
+        let totalOwed = 0;
+        let totalOwing = 0;
+        let activeGroupCount = 0;
+        
         for (let gid of gids) {
             try {
+                const isSettled = await contract.methods.getGroupSettledStatus(gid).call();
+                if (isSettled) continue;
+                
+                activeGroupCount++;
                 const r = await contract.methods.getGroup(gid).call();
                 const name = r.name || r[0] || 'Unnamed';
                 const mems = r.members || r[1] || [];
@@ -257,6 +268,12 @@ async function populateDashboard() {
                     b.netBalance = parseFloat(b.netBalance.toFixed(2));
                 });
                 
+                const userBalance = cb.find(b => b.address.toLowerCase() === user.toLowerCase());
+                if (userBalance) {
+                    if (userBalance.netBalance > 0) totalOwed += userBalance.netBalance;
+                    if (userBalance.netBalance < 0) totalOwing += Math.abs(userBalance.netBalance);
+                }
+                
                 const sls = [];
                 for (let i = 0; i < mems.length; i++) {
                     const bal = parseFloat(web3.utils.fromWei(bls[i].toString(), 'ether'));
@@ -277,65 +294,73 @@ async function populateDashboard() {
                 }
                 
                 const gd = document.createElement('div');
-                gd.className = 'group';
+                gd.className = 'group group-card';
                 gd.innerHTML = `
                     <div class="group-header">
                         <img src="${gb}" class="group-avatar">
-                        <h3>${name} (${gid})</h3>
-                    </div>
-                    <p><strong>Members:</strong></p>
-                    <div class="members-container">
-                        ${mas.map(({ name, avatar, addr }) => `
-                            <span class="member-item">
-                                <img src="${avatar}" class="member-avatar">
-                                <span class="member-name">${name}</span>
-                                <button class="edit-name-button" data-address="${addr}">✏️</button>
-                            </span>
-                        `).join('')}
-                    </div>
-                    <h4>Expenses:</h4>
-                    ${exps.map(e => `<div>${e.description} - ${e.amount} SHM (${getMemberName(e.payer)})</div>`).join('') || '<p>No expenses.</p>'}
-                    <h4>Who Owes Whom:</h4>
-                    ${sls.map(l => `
-                        <div class="settlement-line ${l.from.toLowerCase() === user.toLowerCase() ? 'negative' : 'positive'}">
-                            ${l.fromName} → ${l.toName}: ${l.amount} SHM
+                        <div class="group-title">
+                            <h3>${name}</h3>
+                            <span class="group-id">ID: ${gid}</span>
                         </div>
-                    `).join('') || '<p>All settled.</p>'}
-                    <h4>Breakdown:</h4>
-                    <table class="contribution-table">
-                        <thead>
-                            <tr>
-                                <th>Member</th>
-                                <th>Paid</th>
-                                <th>Share</th>
-                                <th>Balance</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${cb.map(b => `
-                                <tr>
-                                    <td>${b.name}</td>
-                                    <td>${b.totalPaid.toFixed(2)}</td>
-                                    <td>${b.fairShare.toFixed(2)}</td>
-                                    <td class="${b.netBalance > 0 ? 'positive' : b.netBalance < 0 ? 'negative' : 'settled'}">
-                                        ${b.netBalance.toFixed(2)}
-                                    </td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                    <h4>Settle</h4>
-                    <form id="sf-${gid}">
-                        <select id="st-${gid}" required>
-                            <option value="">Select</option>
-                            ${mems.filter(a => a.toLowerCase() !== user.toLowerCase()).map(a => `<option value="${a}">${getMemberName(a)}</option>`).join('')}
-                        </select>
-                        <input type="number" id="sa-${gid}" placeholder="Amount" step="0.01" required>
-                        <button type="submit" class="submit-group">Settle</button>
-                    </form>
-                    <p id="sm-${gid}"></p>
+                    </div>
+                    
+                    <div class="group-stats">
+                        <div class="stat-item">
+                            <span class="stat-label">Members</span>
+                            <span class="stat-value">${mems.length}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Expenses</span>
+                            <span class="stat-value">${exps.length}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Your Balance</span>
+                            <span class="stat-value ${userBalance.netBalance > 0 ? 'positive' : userBalance.netBalance < 0 ? 'negative' : 'settled'}">${userBalance.netBalance.toFixed(2)} SHM</span>
+                        </div>
+                    </div>
+                    
+                    <details class="group-details">
+                        <summary>View Details</summary>
+                        <div class="group-content">
+                            <h4>Members</h4>
+                            <div class="members-container">
+                                ${mas.map(({ name, avatar, addr }) => `
+                                    <span class="member-item">
+                                        <img src="${avatar}" class="member-avatar">
+                                        <span class="member-name">${name}</span>
+                                        <button class="edit-name-button" data-address="${addr}">✏️</button>
+                                    </span>
+                                `).join('')}
+                            </div>
+                            
+                            <h4>Recent Expenses</h4>
+                            <div class="expenses-list">
+                                ${exps.slice(-5).reverse().map(e => `<div class="expense-item-compact">${e.description} - ${e.amount} SHM (${getMemberName(e.payer)})</div>`).join('') || '<p>No expenses.</p>'}
+                            </div>
+                            
+                            <h4>Settlement Status</h4>
+                            <div class="settlement-container">
+                                ${sls.map(l => `
+                                    <div class="settlement-line ${l.from.toLowerCase() === user.toLowerCase() ? 'negative' : 'positive'}">
+                                        ${l.fromName} → ${l.toName}: ${l.amount} SHM
+                                    </div>
+                                `).join('') || '<p class="all-settled">✓ All settled</p>'}
+                            </div>
+                            
+                            <h4>Quick Settle</h4>
+                            <form id="sf-${gid}" class="quick-settle-form">
+                                <select id="st-${gid}" required>
+                                    <option value="">Select member</option>
+                                    ${mems.filter(a => a.toLowerCase() !== user.toLowerCase()).map(a => `<option value="${a}">${getMemberName(a)}</option>`).join('')}
+                                </select>
+                                <input type="number" id="sa-${gid}" placeholder="Amount" step="0.01" required>
+                                <button type="submit" class="submit-group">Settle</button>
+                            </form>
+                            <p id="sm-${gid}" class="settle-message"></p>
+                        </div>
+                    </details>
                 `;
-                dc.appendChild(gd);
+                groupsDiv.appendChild(gd);
                 
                 document.getElementById(`st-${gid}`).addEventListener('change', async () => {
                     const t = document.getElementById(`st-${gid}`).value;
@@ -357,9 +382,11 @@ async function populateDashboard() {
                             gasPrice: web3.utils.toWei('50', 'gwei')
                         });
                         m.textContent = 'Settled! TX: ' + tx.transactionHash;
+                        m.className = 'settle-message success';
                         await populateDashboard();
                     } catch (err) {
                         m.textContent = 'Error: ' + err.message;
+                        m.className = 'settle-message error';
                     }
                 });
                 
@@ -368,8 +395,33 @@ async function populateDashboard() {
                 console.error('Group error:', e);
             }
         }
+        
+        if (activeGroupCount === 0) {
+            dc.innerHTML = '<p>All groups are settled. View settled groups in <a href="groups.html">Groups</a>.</p>';
+            return;
+        }
+        
+        summaryDiv.innerHTML = `
+            <div class="summary-card">
+                <h3>Your Summary</h3>
+                <div class="summary-stats">
+                    <div class="summary-stat positive">
+                        <div class="summary-stat-value">+${totalOwed.toFixed(2)} SHM</div>
+                        <div class="summary-stat-label">You are owed</div>
+                    </div>
+                    <div class="summary-stat negative">
+                        <div class="summary-stat-value">-${totalOwing.toFixed(2)} SHM</div>
+                        <div class="summary-stat-label">You owe</div>
+                    </div>
+                    <div class="summary-stat">
+                        <div class="summary-stat-value">${activeGroupCount}</div>
+                        <div class="summary-stat-label">Active Groups</div>
+                    </div>
+                </div>
+            </div>
+        `;
     } catch (e) {
-        dc.innerHTML = '<p>Error loading.</p>';
+        dc.innerHTML = '<p>Error loading dashboard.</p>';
     }
 }
 
@@ -438,27 +490,57 @@ async function populateGroupsList() {
             return;
         }
         
-        gc.innerHTML = '';
+        gc.innerHTML = '<div class="groups-active"></div><div class="groups-settled"></div>';
+        const activeDiv = gc.querySelector('.groups-active');
+        const settledDiv = gc.querySelector('.groups-settled');
+        
+        activeDiv.innerHTML = '<h4>Active Groups</h4>';
+        settledDiv.innerHTML = '<h4>Settled Groups (History)</h4>';
+        
+        let hasActive = false;
+        let hasSettled = false;
+        
         for (let gid of gids) {
             try {
+                const isSettled = await contract.methods.getGroupSettledStatus(gid).call();
                 const r = await contract.methods.getGroup(gid).call();
                 const name = r.name || r[0] || 'Unnamed';
                 const mems = r.members || r[1] || [];
+                const gb = await createBlockie(gid.toString(), 48);
                 
                 const groupDiv = document.createElement('div');
-                groupDiv.className = 'group';
+                groupDiv.className = isSettled ? 'group group-settled' : 'group';
                 groupDiv.innerHTML = `
-                    <h4>${name} (ID: ${gid})</h4>
-                    <p><strong>Members:</strong> ${mems.length}</p>
-                    <ul>
-                        ${mems.map(m => `<li>${getMemberName(m)} (${truncateAddress(m)})</li>`).join('')}
-                    </ul>
+                    <div class="group-list-item">
+                        <img src="${gb}" class="group-avatar-small">
+                        <div class="group-info">
+                            <h4>${name} ${isSettled ? '<span class="settled-badge">✓ Settled</span>' : ''}</h4>
+                            <p><strong>ID:</strong> ${gid} | <strong>Members:</strong> ${mems.length}</p>
+                            <details>
+                                <summary>Show Members</summary>
+                                <ul class="members-list">
+                                    ${mems.map(m => `<li>${getMemberName(m)} (${truncateAddress(m)})</li>`).join('')}
+                                </ul>
+                            </details>
+                        </div>
+                    </div>
                 `;
-                gc.appendChild(groupDiv);
+                
+                if (isSettled) {
+                    settledDiv.appendChild(groupDiv);
+                    hasSettled = true;
+                } else {
+                    activeDiv.appendChild(groupDiv);
+                    hasActive = true;
+                }
             } catch (e) {
                 console.error('Error loading group:', e);
             }
         }
+        
+        if (!hasActive) activeDiv.innerHTML += '<p>No active groups.</p>';
+        if (!hasSettled) settledDiv.innerHTML += '<p>No settled groups yet.</p>';
+        
     } catch (e) {
         gc.innerHTML = '<p>Error loading groups.</p>';
     }
@@ -498,8 +580,13 @@ async function populateGroupDropdown() {
         if (gids.size === 0) {
             gs.innerHTML += '<option value="" disabled>No groups - create one in Groups page</option>';
         } else {
+            let hasActiveGroups = false;
             for (let g of gids) {
                 try {
+                    const isSettled = await contract.methods.getGroupSettledStatus(g).call();
+                    if (isSettled) continue;
+                    
+                    hasActiveGroups = true;
                     const r = await contract.methods.getGroup(g).call();
                     const n = r.name || r[0] || 'Unnamed';
                     const o = document.createElement('option');
@@ -507,6 +594,10 @@ async function populateGroupDropdown() {
                     o.textContent = `${n} (${g})`;
                     gs.appendChild(o);
                 } catch {}
+            }
+            
+            if (!hasActiveGroups) {
+                gs.innerHTML = '<option value="" disabled>All groups are settled - create a new one</option>';
             }
         }
     } catch {
@@ -583,12 +674,14 @@ async function handleCreateGroupSubmit(e) {
             gasPrice: web3.utils.toWei('50', 'gwei')
         });
         gm.innerHTML = `<strong>Group created!</strong> <a href="https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}" target="_blank">View TX</a>`;
+        gm.className = 'success-message';
         setTimeout(() => {
             e.target.reset();
             populateGroupsList();
         }, 2000);
     } catch (err) {
         gm.textContent = 'Error: ' + err.message;
+        gm.className = 'error-message';
     }
 }
 
