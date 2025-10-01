@@ -36,29 +36,146 @@ async function initWeb3(rpcIndex = 0, maxRetries = 3) {
     }
 }
 
-async function disconnectWallet() { userAccount = null; contract = null; web3 = null; await updateUI(); }
-async function handleMetaMaskToggle() { if (userAccount) await disconnectWallet(); else { await initWeb3(); if (document.getElementById('groupId')) await populateGroupDropdown(); else if (document.getElementById('dashboardContent')) await populateDashboard(); } }
-async function updateUI() { document.querySelectorAll('.metamask-button').forEach(btn => { btn.textContent = userAccount ? `Disconnect (${userAccount.slice(0,6)}...${userAccount.slice(-4)})` : 'Connect with MetaMask'; btn.style.backgroundColor = userAccount ? '#28a745' : '#ffffff'; }); }
-function truncateAddress(addr) { return addr && addr.length >= 10 ? `${addr.slice(0,6)}...${addr.slice(-4)}` : 'Unknown'; }
-function getMemberName(addr) { const names = JSON.parse(localStorage.getItem('memberNames') || '{}'); return names[addr?.toLowerCase()] || truncateAddress(addr); }
-function updateMemberName(addr) { const name = prompt(`Enter new name:`, getMemberName(addr)); if (name && name.trim()) { const names = JSON.parse(localStorage.getItem('memberNames') || '{}'); names[addr.toLowerCase()] = name.trim(); localStorage.setItem('memberNames', JSON.stringify(names)); populateDashboard(); } }
-async function loadBlockiesScript() { if (typeof makeBlockie === 'function') return true; return new Promise(r => { const s = document.createElement('script'); s.src = 'js/ethereum-blockies-base64.min.js'; s.onload = () => r(true); s.onerror = () => r(false); document.head.appendChild(s); }); }
-async function createBlockie(addr, size = 32, initial = '') { try { await loadBlockiesScript(); if (typeof makeBlockie === 'function') return await makeBlockie(addr || '0x0', { size: 8, scale: size / 8 }); } catch (e) {} const c = document.createElement('canvas'); c.width = c.height = size; const ctx = c.getContext('2d'); ctx.fillStyle = '#ccc'; ctx.fillRect(0, 0, size, size); if (initial) { ctx.fillStyle = 'white'; ctx.font = `${size/2}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(initial, size/2, size/2); } return c.toDataURL(); }
-async function checkMetaMaskConnection() { if (!window.ethereum) return; if (!web3) await initWeb3(); const acc = await getAccount(); if (acc) { if (document.getElementById('userAddress')) { document.getElementById('userAddress').value = acc; await populateGroupDropdown(); } else if (document.getElementById('dashboardContent')) await populateDashboard(); } }
-async function getDebtAmount(gid, to) { try { const user = await getAccount(); const bd = await getContract().methods.getGroupBalances(gid).call(); const mems = bd.members || bd[0] || []; const bals = bd.bals || bd[1] || []; const ui = mems.findIndex(a => a.toLowerCase() === user.toLowerCase()); const ti = mems.findIndex(a => a.toLowerCase() === to.toLowerCase()); if (ui === -1 || ti === -1) return '0'; const ub = parseFloat(web3.utils.fromWei(bals[ui] || '0', 'ether')); const tb = parseFloat(web3.utils.fromWei(bals[ti] || '0', 'ether')); if (ub >= 0 || tb <= 0) return '0'; return Math.min(Math.abs(ub), tb).toFixed(2); } catch { return '0'; } }
+async function disconnectWallet() { 
+    userAccount = null; 
+    contract = null; 
+    web3 = null; 
+    await updateUI(); 
+}
+
+async function handleMetaMaskToggle() { 
+    if (userAccount) {
+        await disconnectWallet(); 
+    } else { 
+        await initWeb3(); 
+        if (document.getElementById('groupId')) {
+            await populateGroupDropdown(); 
+        } else if (document.getElementById('dashboardContent')) {
+            await populateDashboard(); 
+        }
+    } 
+}
+
+async function updateUI() { 
+    document.querySelectorAll('.metamask-button').forEach(btn => { 
+        btn.textContent = userAccount ? `Disconnect (${userAccount.slice(0,6)}...${userAccount.slice(-4)})` : 'Connect with MetaMask'; 
+        btn.style.backgroundColor = userAccount ? '#28a745' : '#ffffff'; 
+    }); 
+}
+
+function truncateAddress(addr) { 
+    return addr && addr.length >= 10 ? `${addr.slice(0,6)}...${addr.slice(-4)}` : 'Unknown'; 
+}
+
+function getMemberName(addr) { 
+    const names = JSON.parse(localStorage.getItem('memberNames') || '{}'); 
+    return names[addr?.toLowerCase()] || truncateAddress(addr); 
+}
+
+function updateMemberName(addr) { 
+    const name = prompt(`Enter new name:`, getMemberName(addr)); 
+    if (name && name.trim()) { 
+        const names = JSON.parse(localStorage.getItem('memberNames') || '{}'); 
+        names[addr.toLowerCase()] = name.trim(); 
+        localStorage.setItem('memberNames', JSON.stringify(names)); 
+        populateDashboard(); 
+    } 
+}
+
+async function loadBlockiesScript() { 
+    if (typeof makeBlockie === 'function') return true; 
+    return new Promise(r => { 
+        const s = document.createElement('script'); 
+        s.src = 'js/ethereum-blockies-base64.min.js'; 
+        s.onload = () => r(true); 
+        s.onerror = () => r(false); 
+        document.head.appendChild(s); 
+    }); 
+}
+
+async function createBlockie(addr, size = 32, initial = '') { 
+    try { 
+        await loadBlockiesScript(); 
+        if (typeof makeBlockie === 'function') return await makeBlockie(addr || '0x0', { size: 8, scale: size / 8 }); 
+    } catch (e) {} 
+    const c = document.createElement('canvas'); 
+    c.width = c.height = size; 
+    const ctx = c.getContext('2d'); 
+    ctx.fillStyle = '#ccc'; 
+    ctx.fillRect(0, 0, size, size); 
+    if (initial) { 
+        ctx.fillStyle = 'white'; 
+        ctx.font = `${size/2}px Arial`; 
+        ctx.textAlign = 'center'; 
+        ctx.textBaseline = 'middle'; 
+        ctx.fillText(initial, size/2, size/2); 
+    } 
+    return c.toDataURL(); 
+}
+
+async function checkMetaMaskConnection() { 
+    if (!window.ethereum) return; 
+    if (!web3) await initWeb3(); 
+    const acc = await getAccount(); 
+    if (acc) { 
+        if (document.getElementById('userAddress')) { 
+            document.getElementById('userAddress').value = acc; 
+            await populateGroupDropdown(); 
+        } else if (document.getElementById('dashboardContent')) {
+            await populateDashboard(); 
+        }
+    } 
+}
+
+async function getDebtAmount(gid, to) { 
+    try { 
+        const user = await getAccount(); 
+        const bd = await getContract().methods.getGroupBalances(gid).call(); 
+        const mems = bd.members || bd[0] || []; 
+        const bals = bd.bals || bd[1] || []; 
+        const ui = mems.findIndex(a => a.toLowerCase() === user.toLowerCase()); 
+        const ti = mems.findIndex(a => a.toLowerCase() === to.toLowerCase()); 
+        if (ui === -1 || ti === -1) return '0'; 
+        const ub = parseFloat(web3.utils.fromWei(bals[ui] || '0', 'ether')); 
+        const tb = parseFloat(web3.utils.fromWei(bals[ti] || '0', 'ether')); 
+        if (ub >= 0 || tb <= 0) return '0'; 
+        return Math.min(Math.abs(ub), tb).toFixed(2); 
+    } catch { 
+        return '0'; 
+    } 
+}
 
 async function populateDashboard() {
     const dc = document.getElementById('dashboardContent');
     if (!dc) return;
     dc.innerHTML = '<p>Loading...</p>';
-    if (!web3 || !getContract() || !getAccount()) { dc.innerHTML = '<p>Connect MetaMask.</p>'; return; }
+    if (!web3 || !getContract() || !getAccount()) { 
+        dc.innerHTML = '<p>Connect MetaMask.</p>'; 
+        return; 
+    }
     try {
         const user = await getAccount();
         const gc = parseInt(await getContract().methods.groupCount().call()) || 0;
         const gids = new Set();
-        for (let i = 0; i < Math.min(gc, 50); i++) { try { const gid = await getContract().methods.userGroups(user, i).call(); if (gid && parseInt(gid) > 0) gids.add(gid.toString()); } catch (e) { if (e.message.includes('reverted')) break; } }
-        for (let i = 1; i <= gc; i++) { try { const r = await getContract().methods.getGroup(i).call(); const ms = r.members || r[1] || []; if (ms.map(a => a.toLowerCase()).includes(user.toLowerCase())) gids.add(i.toString()); } catch {} }
-        if (gids.size === 0) { dc.innerHTML = '<p>No groups. Create one.</p>'; return; }
+        for (let i = 0; i < Math.min(gc, 50); i++) { 
+            try { 
+                const gid = await getContract().methods.userGroups(user, i).call(); 
+                if (gid && parseInt(gid) > 0) gids.add(gid.toString()); 
+            } catch (e) { 
+                if (e.message.includes('reverted')) break; 
+            } 
+        }
+        for (let i = 1; i <= gc; i++) { 
+            try { 
+                const r = await getContract().methods.getGroup(i).call(); 
+                const ms = r.members || r[1] || []; 
+                if (ms.map(a => a.toLowerCase()).includes(user.toLowerCase())) gids.add(i.toString()); 
+            } catch {} 
+        }
+        if (gids.size === 0) { 
+            dc.innerHTML = '<p>No groups. Create one in <a href="add-expense.html">Add Expense</a>.</p>'; 
+            return; 
+        }
         dc.innerHTML = '';
         for (let gid of gids) {
             try {
@@ -66,34 +183,124 @@ async function populateDashboard() {
                 const name = r.name || r[0] || 'Unnamed';
                 const mems = r.members || r[1] || [];
                 const gb = await createBlockie(gid.toString(), 64);
-                const mas = await Promise.all(mems.map(async a => ({ addr: a, name: getMemberName(a), avatar: await createBlockie(a, 32, getMemberName(a)[0]) })));
+                const mas = await Promise.all(mems.map(async a => ({ 
+                    addr: a, 
+                    name: getMemberName(a), 
+                    avatar: await createBlockie(a, 32, getMemberName(a)[0]) 
+                })));
                 const bd = await getContract().methods.getGroupBalances(gid).call();
                 const bms = bd.members || bd[0] || [];
                 const bls = bd.bals || bd[1] || [];
                 const eids = await getContract().methods.getGroupExpenseIds(gid).call();
-                const exps = (await Promise.all(eids.map(async eid => { try { const e = await getContract().methods.getExpense(eid).call(); return { id: eid, description: e.description || 'N/A', amount: web3.utils.fromWei(e.amount || '0', 'ether'), payer: e.payer || 'Unknown', splitType: e.splitType || 'Unknown', customShares: e.customShares || [] }; } catch { return null; } }))).filter(e => e);
-                const cb = mems.map(m => ({ address: m, name: getMemberName(m), totalPaid: 0, fairShare: 0, netBalance: 0 }));
-                for (const ex of exps) { const amt = parseFloat(ex.amount); const pi = cb.findIndex(b => b.address.toLowerCase() === ex.payer.toLowerCase()); if (pi !== -1) cb[pi].totalPaid += amt; const shs = ex.splitType === 'custom' && ex.customShares ? ex.customShares.map(s => parseInt(s) / 100) : mems.map(() => 1 / mems.length); mems.forEach((m, i) => { const mi = cb.findIndex(b => b.address.toLowerCase() === m.toLowerCase()); if (mi !== -1) cb[mi].fairShare += amt * shs[i]; }); }
-                cb.forEach(b => { const bi = bms.findIndex(a => a.toLowerCase() === b.address.toLowerCase()); if (bi !== -1) b.netBalance = parseFloat(web3.utils.fromWei(bls[bi].toString(), 'ether')); b.totalPaid = parseFloat(b.totalPaid.toFixed(2)); b.fairShare = parseFloat(b.fairShare.toFixed(2)); b.netBalance = parseFloat(b.netBalance.toFixed(2)); });
-                const sls = []; for (let i = 0; i < mems.length; i++) { const bal = parseFloat(web3.utils.fromWei(bls[i].toString(), 'ether')); if (bal >= 0) continue; for (let j = 0; j < mems.length; j++) { if (i === j) continue; const tb = parseFloat(web3.utils.fromWei(bls[j].toString(), 'ether')); if (tb <= 0) continue; const d = Math.min(Math.abs(bal), tb); if (d > 0.01) sls.push({ from: mems[i], to: mems[j], amount: d.toFixed(2), fromName: getMemberName(mems[i]), toName: getMemberName(mems[j]) }); } }
-                const gd = document.createElement('div'); gd.className = 'group';
+                const exps = (await Promise.all(eids.map(async eid => { 
+                    try { 
+                        const e = await getContract().methods.getExpense(eid).call(); 
+                        return { 
+                            id: eid, 
+                            description: e.description || 'N/A', 
+                            amount: web3.utils.fromWei(e.amount || '0', 'ether'), 
+                            payer: e.payer || 'Unknown', 
+                            splitType: e.splitType || 'Unknown', 
+                            customShares: e.customShares || [] 
+                        }; 
+                    } catch { 
+                        return null; 
+                    } 
+                }))).filter(e => e);
+                const cb = mems.map(m => ({ 
+                    address: m, 
+                    name: getMemberName(m), 
+                    totalPaid: 0, 
+                    fairShare: 0, 
+                    netBalance: 0 
+                }));
+                for (const ex of exps) { 
+                    const amt = parseFloat(ex.amount); 
+                    const pi = cb.findIndex(b => b.address.toLowerCase() === ex.payer.toLowerCase()); 
+                    if (pi !== -1) cb[pi].totalPaid += amt; 
+                    const shs = ex.splitType === 'custom' && ex.customShares ? ex.customShares.map(s => parseInt(s) / 100) : mems.map(() => 1 / mems.length); 
+                    mems.forEach((m, i) => { 
+                        const mi = cb.findIndex(b => b.address.toLowerCase() === m.toLowerCase()); 
+                        if (mi !== -1) cb[mi].fairShare += amt * shs[i]; 
+                    }); 
+                }
+                cb.forEach(b => { 
+                    const bi = bms.findIndex(a => a.toLowerCase() === b.address.toLowerCase()); 
+                    if (bi !== -1) b.netBalance = parseFloat(web3.utils.fromWei(bls[bi].toString(), 'ether')); 
+                    b.totalPaid = parseFloat(b.totalPaid.toFixed(2)); 
+                    b.fairShare = parseFloat(b.fairShare.toFixed(2)); 
+                    b.netBalance = parseFloat(b.netBalance.toFixed(2)); 
+                });
+                const sls = []; 
+                for (let i = 0; i < mems.length; i++) { 
+                    const bal = parseFloat(web3.utils.fromWei(bls[i].toString(), 'ether')); 
+                    if (bal >= 0) continue; 
+                    for (let j = 0; j < mems.length; j++) { 
+                        if (i === j) continue; 
+                        const tb = parseFloat(web3.utils.fromWei(bls[j].toString(), 'ether')); 
+                        if (tb <= 0) continue; 
+                        const d = Math.min(Math.abs(bal), tb); 
+                        if (d > 0.01) sls.push({ 
+                            from: mems[i], 
+                            to: mems[j], 
+                            amount: d.toFixed(2), 
+                            fromName: getMemberName(mems[i]), 
+                            toName: getMemberName(mems[j]) 
+                        }); 
+                    } 
+                }
+                const gd = document.createElement('div'); 
+                gd.className = 'group';
                 gd.innerHTML = `<div class="group-header"><img src="${gb}" class="group-avatar"><h3>${name} (${gid})</h3></div><p><strong>Members:</strong></p><div class="members-container">${mas.map(({ name, avatar, addr }) => `<span class="member-item"><img src="${avatar}" class="member-avatar"><span class="member-name">${name}</span><button class="edit-name-button" data-address="${addr}">✏️</button></span>`).join('')}</div><h4>Expenses:</h4>${exps.map(e => `<div>${e.description} - ${e.amount} SHM (${getMemberName(e.payer)})</div>`).join('') || '<p>No expenses.</p>'}<h4>Who Owes Whom:</h4>${sls.map(l => `<div class="settlement-line ${l.from.toLowerCase() === user.toLowerCase() ? 'negative' : 'positive'}">${l.fromName} → ${l.toName}: ${l.amount} SHM</div>`).join('') || '<p>All settled.</p>'}<h4>Breakdown:</h4><table class="contribution-table"><thead><tr><th>Member</th><th>Paid</th><th>Share</th><th>Balance</th></tr></thead><tbody>${cb.map(b => `<tr><td>${b.name}</td><td>${b.totalPaid.toFixed(2)}</td><td>${b.fairShare.toFixed(2)}</td><td class="${b.netBalance > 0 ? 'positive' : b.netBalance < 0 ? 'negative' : 'settled'}">${b.netBalance.toFixed(2)}</td></tr>`).join('')}</tbody></table><h4>Settle</h4><form id="sf-${gid}"><select id="st-${gid}" required><option value="">Select</option>${mems.filter(a => a.toLowerCase() !== user.toLowerCase()).map(a => `<option value="${a}">${getMemberName(a)}</option>`).join('')}</select><input type="number" id="sa-${gid}" placeholder="Amount" step="0.01" required><button type="submit" class="submit-group">Settle</button></form><p id="sm-${gid}"></p>`;
                 dc.appendChild(gd);
-                document.getElementById(`st-${gid}`).addEventListener('change', async () => { const t = document.getElementById(`st-${gid}`).value; if (t) { const d = await getDebtAmount(gid, t); document.getElementById(`sa-${gid}`).value = d !== '0' ? d : ''; } });
-                document.getElementById(`sf-${gid}`).addEventListener('submit', async (e) => { e.preventDefault(); const t = document.getElementById(`st-${gid}`).value; const a = web3.utils.toWei(document.getElementById(`sa-${gid}`).value, 'ether'); const m = document.getElementById(`sm-${gid}`); try { const tx = await getContract().methods.settleDebt(gid, t, a).send({ from: await getAccount(), value: '0', gasPrice: web3.utils.toWei('50', 'gwei') }); m.textContent = 'Settled! TX: ' + tx.transactionHash; await populateDashboard(); } catch (err) { m.textContent = 'Error: ' + err.message; } });
+                document.getElementById(`st-${gid}`).addEventListener('change', async () => { 
+                    const t = document.getElementById(`st-${gid}`).value; 
+                    if (t) { 
+                        const d = await getDebtAmount(gid, t); 
+                        document.getElementById(`sa-${gid}`).value = d !== '0' ? d : ''; 
+                    } 
+                });
+                document.getElementById(`sf-${gid}`).addEventListener('submit', async (e) => { 
+                    e.preventDefault(); 
+                    const t = document.getElementById(`st-${gid}`).value; 
+                    const a = web3.utils.toWei(document.getElementById(`sa-${gid}`).value, 'ether'); 
+                    const m = document.getElementById(`sm-${gid}`); 
+                    try { 
+                        const tx = await getContract().methods.settleDebt(gid, t, a).send({ 
+                            from: await getAccount(), 
+                            value: '0', 
+                            gasPrice: web3.utils.toWei('50', 'gwei') 
+                        }); 
+                        m.textContent = 'Settled! TX: ' + tx.transactionHash; 
+                        await populateDashboard(); 
+                    } catch (err) { 
+                        m.textContent = 'Error: ' + err.message; 
+                    } 
+                });
                 gd.querySelectorAll('.edit-name-button').forEach(b => b.addEventListener('click', () => updateMemberName(b.dataset.address)));
-            } catch (e) { console.error('Group error:', e); }
+            } catch (e) { 
+                console.error('Group error:', e); 
+            }
         }
-    } catch (e) { dc.innerHTML = '<p>Error loading.</p>'; }
+    } catch (e) { 
+        dc.innerHTML = '<p>Error loading.</p>'; 
+    }
 }
 
 async function fetchShmPrice() {
     shmPrice = {};
     for (const c of ['usd', 'eur', 'inr', 'shm']) {
         try {
-            if (c === 'shm') shmPrice[c] = 1;
-            else { const r = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=shardeum&vs_currencies=${c}`); const d = await r.json(); shmPrice[c] = d.shardeum?.[c] || (c === 'usd' ? 0.11 : c === 'eur' ? 0.1 : 9.0); }
-        } catch { shmPrice[c] = c === 'shm' ? 1 : (c === 'usd' ? 0.11 : c === 'eur' ? 0.1 : 9.0); }
+            if (c === 'shm') {
+                shmPrice[c] = 1;
+            } else { 
+                const r = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=shardeum&vs_currencies=${c}`); 
+                const d = await r.json(); 
+                shmPrice[c] = d.shardeum?.[c] || (c === 'usd' ? 0.11 : c === 'eur' ? 0.1 : 9.0); 
+            }
+        } catch { 
+            shmPrice[c] = c === 'shm' ? 1 : (c === 'usd' ? 0.11 : c === 'eur' ? 0.1 : 9.0); 
+        }
     }
     updateShmAmount();
 }
@@ -102,88 +309,237 @@ function updateShmAmount() {
     const ai = document.getElementById('amount'), cs = document.getElementById('currency'), sa = document.getElementById('shmAmount');
     if (!sa || !ai || !cs || !shmPrice) return;
     const a = parseFloat(ai.value);
-    if (isNaN(a) || a <= 0) { sa.textContent = 'SHM Amount: Enter amount'; return; }
+    if (isNaN(a) || a <= 0) { 
+        sa.textContent = 'SHM Amount: Enter amount'; 
+        return; 
+    }
     const c = cs.value.toLowerCase();
     sa.textContent = `SHM Amount: ${(c === 'shm' ? a : a / shmPrice[c]).toFixed(4)} SHM`;
 }
 
+function updateExpenseFormUI(hasGroups) {
+    const gss = document.getElementById('groupSelectionSection');
+    const eds = document.getElementById('expenseDetailsSection');
+    const gcd = document.getElementById('groupCreation');
+    const pt = document.getElementById('pageTitle');
+    const sb = document.getElementById('submitButton');
+    
+    if (!hasGroups) {
+        if (gss) gss.style.display = 'none';
+        if (eds) eds.style.display = 'none';
+        if (gcd) gcd.style.display = 'block';
+        if (pt) pt.textContent = 'Create Your First Group';
+        if (sb) sb.textContent = 'Create Group';
+    } else {
+        if (gss) gss.style.display = 'block';
+        if (pt) pt.textContent = 'Add a New Expense';
+    }
+}
+
 async function populateGroupDropdown() {
     const gs = document.getElementById('groupId'), gcd = document.getElementById('groupCreation'), sb = document.getElementById('submitButton');
+    const eds = document.getElementById('expenseDetailsSection');
     if (!gs) return;
     gs.innerHTML = '<option value="">Loading...</option>';
-    if (!web3 || !getContract() || !getAccount()) { gs.innerHTML = '<option value="">Connect wallet</option>'; gcd.style.display = 'none'; return; }
+    if (!web3 || !getContract() || !getAccount()) { 
+        gs.innerHTML = '<option value="">Connect wallet</option>'; 
+        if (gcd) gcd.style.display = 'none'; 
+        if (eds) eds.style.display = 'none';
+        return; 
+    }
     try {
         const user = await getAccount();
         document.getElementById('userAddress').value = user;
         const gc = parseInt(await getContract().methods.groupCount().call()) || 0;
         const gids = new Set();
-        for (let i = 0; i < Math.min(gc, 50); i++) { try { const g = await getContract().methods.userGroups(user, i).call(); if (g && parseInt(g) > 0) gids.add(g.toString()); } catch (e) { if (e.message.includes('reverted')) break; } }
-        for (let i = 1; i <= gc; i++) { try { const r = await getContract().methods.getGroup(i).call(); const ms = r.members || r[1] || []; if (ms.map(a => a.toLowerCase()).includes(user.toLowerCase())) gids.add(i.toString()); } catch {} }
-        gs.innerHTML = '<option value="">Select a group</option>';
-        if (gids.size === 0) { gs.innerHTML += '<option value="create">Create new group</option>'; gcd.style.display = 'block'; sb.textContent = 'Create Group'; } else {
-            for (let g of gids) { try { const r = await getContract().methods.getGroup(g).call(); const n = r.name || r[0] || 'Unnamed'; const o = document.createElement('option'); o.value = g; o.textContent = `${n} (${g})`; gs.appendChild(o); } catch {} }
-            gs.innerHTML += '<option value="create">Create new group</option>'; gcd.style.display = 'none'; sb.textContent = 'Add Expense';
+        for (let i = 0; i < Math.min(gc, 50); i++) { 
+            try { 
+                const g = await getContract().methods.userGroups(user, i).call(); 
+                if (g && parseInt(g) > 0) gids.add(g.toString()); 
+            } catch (e) { 
+                if (e.message.includes('reverted')) break; 
+            } 
         }
-    } catch { gs.innerHTML = '<option value="">Error</option><option value="create">Create new</option>'; gcd.style.display = 'block'; sb.textContent = 'Create Group'; }
+        for (let i = 1; i <= gc; i++) { 
+            try { 
+                const r = await getContract().methods.getGroup(i).call(); 
+                const ms = r.members || r[1] || []; 
+                if (ms.map(a => a.toLowerCase()).includes(user.toLowerCase())) gids.add(i.toString()); 
+            } catch {} 
+        }
+        gs.innerHTML = '<option value="">Select a group</option>';
+        if (gids.size === 0) { 
+            updateExpenseFormUI(false);
+        } else {
+            updateExpenseFormUI(true);
+            for (let g of gids) { 
+                try { 
+                    const r = await getContract().methods.getGroup(g).call(); 
+                    const n = r.name || r[0] || 'Unnamed'; 
+                    const o = document.createElement('option'); 
+                    o.value = g; 
+                    o.textContent = `${n} (${g})`; 
+                    gs.appendChild(o); 
+                } catch {} 
+            }
+            gs.innerHTML += '<option value="create">+ Create new group</option>'; 
+            if (gcd) gcd.style.display = 'none'; 
+            if (eds) eds.style.display = 'none';
+            if (sb) sb.textContent = 'Add Expense';
+        }
+    } catch { 
+        gs.innerHTML = '<option value="">Error</option><option value="create">Create new</option>'; 
+        updateExpenseFormUI(false);
+    }
 }
 
-function toggleCustomShares() { const s = document.getElementById('split'), c = document.getElementById('customShares'), l = document.getElementById('customLabel'); if (s && c && l) { const sh = s.value === 'custom'; c.style.display = sh ? 'block' : 'none'; l.style.display = sh ? 'block' : 'none'; } }
-function toggleGroupCreation() { const gs = document.getElementById('groupId'), gcd = document.getElementById('groupCreation'), sb = document.getElementById('submitButton'); if (gs && gcd && sb) { gcd.style.display = gs.value === 'create' ? 'block' : 'none'; sb.textContent = gs.value === 'create' ? 'Create Group' : 'Add Expense'; } }
-function addMemberField() { const mi = document.getElementById('memberInputs'); if (!mi || mi.children.length >= 10) return; const d = document.createElement('div'); d.className = 'member-input'; d.innerHTML = '<input type="text" class="member-name" placeholder="Name"><input type="text" class="member-address" placeholder="0x..."><button type="button" class="remove-member">Remove</button>'; mi.appendChild(d); d.querySelector('.remove-member').addEventListener('click', () => removeMember(d.querySelector('.remove-member'))); }
-function removeMember(btn) { const mi = document.getElementById('memberInputs'); if (mi && mi.children.length > 2) btn.parentElement.remove(); }
+function toggleCustomShares() { 
+    const s = document.getElementById('split'), c = document.getElementById('customShares'), l = document.getElementById('customLabel'); 
+    if (s && c && l) { 
+        const sh = s.value === 'custom'; 
+        c.style.display = sh ? 'block' : 'none'; 
+        l.style.display = sh ? 'block' : 'none'; 
+    } 
+}
+
+function toggleGroupCreation() { 
+    const gs = document.getElementById('groupId'), gcd = document.getElementById('groupCreation'), sb = document.getElementById('submitButton');
+    const eds = document.getElementById('expenseDetailsSection');
+    if (gs && gcd && sb) { 
+        const isCreate = gs.value === 'create';
+        gcd.style.display = isCreate ? 'block' : 'none'; 
+        if (eds) eds.style.display = isCreate ? 'none' : 'block';
+        sb.textContent = isCreate ? 'Create Group' : 'Add Expense'; 
+    } 
+}
+
+function addMemberField() { 
+    const mi = document.getElementById('memberInputs'); 
+    if (!mi || mi.children.length >= 10) return; 
+    const d = document.createElement('div'); 
+    d.className = 'member-input'; 
+    d.innerHTML = '<input type="text" class="member-name" placeholder="Name"><input type="text" class="member-address" placeholder="0x..."><button type="button" class="remove-member">Remove</button>'; 
+    mi.appendChild(d); 
+    d.querySelector('.remove-member').addEventListener('click', () => removeMember(d.querySelector('.remove-member'))); 
+}
+
+function removeMember(btn) { 
+    const mi = document.getElementById('memberInputs'); 
+    if (mi && mi.children.length > 2) btn.parentElement.remove(); 
+}
 
 async function handleExpenseFormSubmit(e) {
     e.preventDefault();
     const em = document.getElementById('expenseMessage');
-    if (!web3 || !getContract() || !getAccount()) { em.textContent = 'Connect MetaMask first.'; return; }
+    if (!web3 || !getContract() || !getAccount()) { 
+        em.textContent = 'Connect MetaMask first.'; 
+        return; 
+    }
     const gid = document.getElementById('groupId')?.value, sb = document.getElementById('submitButton'), gcd = document.getElementById('groupCreation');
-    if (gid === 'create') {
+    if (gid === 'create' || !gid) {
         const gn = document.getElementById('groupName')?.value;
         const mis = document.getElementsByClassName('member-input');
-        if (!gn) { em.textContent = 'Enter group name.'; return; }
+        if (!gn) { 
+            em.textContent = 'Enter group name.'; 
+            return; 
+        }
         const mems = [], names = {};
         const user = (await getAccount()).toLowerCase();
         for (let mi of mis) {
             const a = mi.querySelector('.member-address')?.value?.trim().toLowerCase();
             const n = mi.querySelector('.member-name')?.value?.trim();
-            if (a && web3.utils.isAddress(a)) { mems.push(a); if (n && n !== 'Me') names[a] = n; }
+            if (a && web3.utils.isAddress(a)) { 
+                mems.push(a); 
+                if (n && n !== 'Me') names[a] = n; 
+            }
         }
-        if (mems.length < 2) { em.textContent = 'Need at least 2 members.'; return; }
-        if (!mems.includes(user)) { em.textContent = 'Your address missing.'; return; }
+        if (mems.length < 2) { 
+            em.textContent = 'Need at least 2 members.'; 
+            return; 
+        }
+        if (!mems.includes(user)) { 
+            em.textContent = 'Your address missing.'; 
+            return; 
+        }
         const en = JSON.parse(localStorage.getItem('memberNames') || '{}');
-        localStorage.setItem('memberNames', JSON.stringify({ ...en, ...names }));
+        localStorage.setItem('memberNames', JSON.stringify({
         try {
-            const tx = await getContract().methods.createGroup(gn, mems).send({ from: await getAccount(), value: '0', gasPrice: web3.utils.toWei('50', 'gwei') });
+            const tx = await getContract().methods.createGroup(gn, mems).send({ 
+                from: await getAccount(), 
+                value: '0', 
+                gasPrice: web3.utils.toWei('50', 'gwei') 
+            });
             em.innerHTML = `<strong>Group created!</strong> <a href="https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}" target="_blank">View TX</a>`;
-            setTimeout(() => { gcd.style.display = 'none'; sb.textContent = 'Add Expense'; e.target.reset(); populateGroupDropdown(); }, 3000);
-        } catch (err) { em.textContent = 'Error: ' + err.message; }
+            setTimeout(() => { 
+                if (gcd) gcd.style.display = 'none'; 
+                if (sb) sb.textContent = 'Add Expense'; 
+                e.target.reset(); 
+                populateGroupDropdown(); 
+            }, 3000);
+        } catch (err) { 
+            em.textContent = 'Error: ' + err.message; 
+        }
         return;
     }
-    if (!gid) { em.textContent = 'Select a group.'; return; }
     const desc = document.getElementById('description')?.value;
     const ai = document.getElementById('amount')?.value;
     const curr = document.getElementById('currency')?.value;
     let amt;
-    try { const sa = curr.toLowerCase() === 'shm' ? parseFloat(ai) : parseFloat(ai) / shmPrice[curr.toLowerCase()]; amt = web3.utils.toWei(sa.toFixed(18), 'ether'); } catch { em.textContent = 'Invalid amount.'; return; }
+    try { 
+        const sa = curr.toLowerCase() === 'shm' ? parseFloat(ai) : parseFloat(ai) / shmPrice[curr.toLowerCase()]; 
+        amt = web3.utils.toWei(sa.toFixed(18), 'ether'); 
+    } catch { 
+        em.textContent = 'Invalid amount.'; 
+        return; 
+    }
     const st = document.getElementById('split')?.value;
     let cs = [];
     if (st === 'custom') {
         try {
             cs = document.getElementById('customShares')?.value.split(',').map(s => parseInt(s.trim()));
-            if (cs.reduce((s, v) => s + v, 0) !== 100) { em.textContent = 'Shares must sum to 100%.'; return; }
+            if (cs.reduce((s, v) => s + v, 0) !== 100) { 
+                em.textContent = 'Shares must sum to 100%.'; 
+                return; 
+            }
             const [_, ms] = await getContract().methods.getGroup(gid).call();
-            if (cs.length !== ms.length) { em.textContent = 'Shares count mismatch.'; return; }
-        } catch { em.textContent = 'Invalid shares format.'; return; }
+            if (cs.length !== ms.length) { 
+                em.textContent = 'Shares count mismatch.'; 
+                return; 
+            }
+        } catch { 
+            em.textContent = 'Invalid shares format.'; 
+            return; 
+        }
     }
     try {
-        const tx = await getContract().methods.addExpense(gid, desc, amt, st, cs).send({ from: await getAccount(), value: '0', gasPrice: web3.utils.toWei('50', 'gwei') });
+        const tx = await getContract().methods.addExpense(gid, desc, amt, st, cs).send({ 
+            from: await getAccount(), 
+            value: '0', 
+            gasPrice: web3.utils.toWei('50', 'gwei') 
+        });
         em.innerHTML = `<strong>Expense added!</strong> <a href="https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}" target="_blank">View TX</a>`;
-        setTimeout(() => { e.target.reset(); populateDashboard(); }, 3000);
-    } catch (err) { em.textContent = 'Error: ' + err.message; }
+        setTimeout(() => { 
+            e.target.reset(); 
+            populateDashboard(); 
+        }, 3000);
+    } catch (err) { 
+        em.textContent = 'Error: ' + err.message; 
+    }
 }
 
-function getContract() { return contract; }
-async function getAccount() { if (!web3 || !window.ethereum) return null; try { const accs = await window.ethereum.request({ method: 'eth_accounts' }); return accs[0] || null; } catch { return null; } }
+function getContract() { 
+    return contract; 
+}
+
+async function getAccount() { 
+    if (!web3 || !window.ethereum) return null; 
+    try { 
+        const accs = await window.ethereum.request({ method: 'eth_accounts' }); 
+        return accs[0] || null; 
+    } catch { 
+        return null; 
+    } 
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
     document.querySelector('.metamask-button')?.addEventListener('click', handleMetaMaskToggle);
