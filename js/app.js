@@ -705,7 +705,7 @@ function updateMemberNumbers() {
             if (index === 0) {
                 label.textContent = 'Member 1 (You):';
             } else {
-                label.textContent = `Member ${index + 1}:';
+                label.textContent = `Member ${index + 1}:`;
             }
         }
     });
