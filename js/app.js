@@ -214,350 +214,6 @@ async function populateDashboard() {
                 const r = await contract.methods.getGroup(gid).call();
                 const name = r.name || r[0] || 'Unnamed';
                 const mems = r.members || r[1] || [];
-                const gb = await createBlockie(gid.toString(), 48);
-                
-                const groupDiv = document.createElement('div');
-                groupDiv.className = isSettled ? 'group group-settled' : 'group';
-                
-                if (isSettled) {
-                    const eids = await contract.methods.getGroupExpenseIds(gid).call();
-                    const expenses = await Promise.all(eids.map(async eid => {
-                        try {
-                            const e = await contract.methods.getExpense(eid).call();
-                            return {
-                                description: e.description,
-                                amount: web3.utils.fromWei(e.amount || '0', 'ether'),
-                                payer: e.payer
-                            };
-                        } catch {
-                            return null;
-                        }
-                    }));
-                    
-                    groupDiv.innerHTML = `
-                        <div class="group-list-item">
-                            <img src="${gb}" class="group-avatar-small">
-                            <div class="group-info">
-                                <h4>${name} <span class="settled-badge">✓ Settled</span></h4>
-                                <p><strong>ID:</strong> ${gid} | <strong>Members:</strong> ${mems.length} | <strong>Expenses:</strong> ${expenses.filter(e => e).length}</p>
-                                <details class="group-history-details">
-                                    <summary>View Full History</summary>
-                                    <div class="history-content">
-                                        <h5>Members</h5>
-                                        <ul class="members-list">
-                                            ${mems.map(m => `<li>${getMemberName(m)} (${truncateAddress(m)})</li>`).join('')}
-                                        </ul>
-                                        <h5>Transaction History</h5>
-                                        <div class="transaction-history">
-                                            ${expenses.filter(e => e).map(e => `
-                                                <div class="transaction-item">
-                                                    <span class="transaction-desc">${e.description}</span>
-                                                    <span class="transaction-amount">${e.amount} SHM</span>
-                                                    <span class="transaction-payer">by ${getMemberName(e.payer)}</span>
-                                                </div>
-                                            `).join('') || '<p>No transaction history available</p>'}
-                                        </div>
-                                        <div class="settlement-info">
-                                            <p class="settlement-status">✓ All debts have been settled</p>
-                                            <a href="https://explorer-mezame.shardeum.org/address/${CONTRACT_ADDRESS}" target="_blank" class="explorer-link">
-                                                View on Explorer →
-                                            </a>
-                                        </div>
-                                    </div>
-                                </details>
-                            </div>
-                        </div>
-                    `;
-                    settledDiv.appendChild(groupDiv);
-                    hasSettled = true;
-                } else {
-                    groupDiv.innerHTML = `
-                        <div class="group-list-item">
-                            <img src="${gb}" class="group-avatar-small">
-                            <div class="group-info">
-                                <h4>${name}</h4>
-                                <p><strong>ID:</strong> ${gid} | <strong>Members:</strong> ${mems.length}</p>
-                                <details>
-                                    <summary>Show Members</summary>
-                                    <ul class="members-list">
-                                        ${mems.map(m => `<li>${getMemberName(m)} (${truncateAddress(m)})</li>`).join('')}
-                                    </ul>
-                                </details>
-                            </div>
-                        </div>
-                    `;
-                    activeDiv.appendChild(groupDiv);
-                    hasActive = true;
-                }
-            } catch (e) {
-                console.error('Error loading group:', e);
-            }
-        }
-        
-        if (!hasActive) activeDiv.innerHTML += '<p>No active groups.</p>';
-        if (!hasSettled) settledDiv.innerHTML += '<p>No settled groups yet.</p>';
-        
-    } catch (e) {
-        gc.innerHTML = '<p>Error loading groups.</p>';
-    }
-}
-
-async function populateGroupDropdown() {
-    const gs = document.getElementById('groupId');
-    if (!gs) return;
-    gs.innerHTML = '<option value="">Loading...</option>';
-    if (!web3 || !contract || !userAccount) {
-        gs.innerHTML = '<option value="">Connect wallet</option>';
-        return;
-    }
-    try {
-        const user = await getAccount();
-        const gc = parseInt(await contract.methods.groupCount().call()) || 0;
-        const gids = new Set();
-        
-        for (let i = 0; i < Math.min(gc, 50); i++) {
-            try {
-                const g = await contract.methods.userGroups(user, i).call();
-                if (g && parseInt(g) > 0) gids.add(g.toString());
-            } catch (e) {
-                if (e.message.includes('reverted')) break;
-            }
-        }
-        
-        for (let i = 1; i <= gc; i++) {
-            try {
-                const r = await contract.methods.getGroup(i).call();
-                const ms = r.members || r[1] || [];
-                if (ms.map(a => a.toLowerCase()).includes(user.toLowerCase())) gids.add(i.toString());
-            } catch {}
-        }
-        
-        gs.innerHTML = '<option value="">Select a group</option>';
-        if (gids.size === 0) {
-            gs.innerHTML += '<option value="" disabled>No groups - create one in Groups page</option>';
-        } else {
-            let hasActiveGroups = false;
-            for (let g of gids) {
-                try {
-                    const isSettled = await contract.methods.getGroupSettledStatus(g).call();
-                    if (isSettled) continue;
-                    
-                    hasActiveGroups = true;
-                    const r = await contract.methods.getGroup(g).call();
-                    const n = r.name || r[0] || 'Unnamed';
-                    const o = document.createElement('option');
-                    o.value = g;
-                    o.textContent = `${n} (${g})`;
-                    gs.appendChild(o);
-                } catch {}
-            }
-            
-            if (!hasActiveGroups) {
-                gs.innerHTML = '<option value="" disabled>All groups are settled - create a new one</option>';
-            }
-        }
-    } catch {
-        gs.innerHTML = '<option value="">Error loading groups</option>';
-    }
-}
-
-function toggleCustomShares() {
-    const s = document.getElementById('split');
-    const container = document.getElementById('customSharesContainer');
-    if (s && container) {
-        container.style.display = s.value === 'custom' ? 'block' : 'none';
-    }
-}
-
-function addMemberField() {
-    const mi = document.getElementById('memberInputs');
-    if (!mi || mi.children.length >= 10) return;
-    const memberNumber = mi.children.length + 1;
-    const d = document.createElement('div');
-    d.className = 'member-input';
-    d.innerHTML = `<span class="member-label">Member ${memberNumber}:</span><input type="text" class="member-name" placeholder="Member Name" required><input type="text" class="member-address" placeholder="0x..." required><button type="button" class="remove-member">Remove</button>`;
-    mi.appendChild(d);
-    d.querySelector('.remove-member').addEventListener('click', () => {
-        removeMember(d.querySelector('.remove-member'));
-        updateMemberNumbers();
-    });
-}
-
-function updateMemberNumbers() {
-    const mi = document.getElementById('memberInputs');
-    if (!mi) return;
-    const memberInputs = mi.querySelectorAll('.member-input');
-    memberInputs.forEach((input, index) => {
-        const label = input.querySelector('.member-label');
-        if (label) {
-            if (index === 0) {
-                label.textContent = 'Member 1 (You):';
-            } else {
-                label.textContent = `Member ${index + 1}:`;
-            }
-        }
-    });
-}
-
-function removeMember(btn) {
-    const mi = document.getElementById('memberInputs');
-    if (mi && mi.children.length > 2) btn.parentElement.remove();
-}
-
-async function handleCreateGroupSubmit(e) {
-    e.preventDefault();
-    const gm = document.getElementById('groupMessage');
-    if (!web3 || !contract || !userAccount) {
-        gm.textContent = 'Connect MetaMask first.';
-        return;
-    }
-    
-    const gn = document.getElementById('groupName')?.value;
-    const mis = document.getElementsByClassName('member-input');
-    if (!gn) {
-        gm.textContent = 'Enter group name.';
-        return;
-    }
-    
-    const mems = [], names = {};
-    const user = (await getAccount()).toLowerCase();
-    for (let mi of mis) {
-        const a = mi.querySelector('.member-address')?.value?.trim().toLowerCase();
-        const n = mi.querySelector('.member-name')?.value?.trim();
-        if (a && web3.utils.isAddress(a)) {
-            mems.push(a);
-            if (n && n !== 'Me') names[a] = n;
-        }
-    }
-    
-    if (mems.length < 2) {
-        gm.textContent = 'Need at least 2 members.';
-        return;
-    }
-    if (!mems.includes(user)) {
-        gm.textContent = 'Your address missing.';
-        return;
-    }
-    
-    const en = JSON.parse(localStorage.getItem('memberNames') || '{}');
-    localStorage.setItem('memberNames', JSON.stringify(Object.assign({}, en, names)));
-    
-    try {
-        const tx = await contract.methods.createGroup(gn, mems).send({
-            from: await getAccount(),
-            value: '0',
-            gasPrice: web3.utils.toWei('50', 'gwei')
-        });
-        gm.innerHTML = `<strong>Group created!</strong> <a href="https://explorer-mezame.shardeum.org/tx/${tx.transactionHash}" target="_blank">View TX</a>`;
-        gm.className = 'success-message';
-        setTimeout(() => {
-            e.target.reset();
-            populateGroupsList();
-        }, 2000);
-    } catch (err) {
-        gm.textContent = 'Error: ' + err.message;
-        gm.className = 'error-message';
-    }
-}
-
-async function handleExpenseFormSubmit(e) {
-    e.preventDefault();
-    const em = document.getElementById('expenseMessage');
-    if (!web3 || !contract || !userAccount) {
-        em.textContent = 'Connect MetaMask first.';
-        return;
-    }
-    
-    const gid = document.getElementById('groupId')?.value;
-    if (!gid) {
-        em.textContent = 'Please select a group.';
-        return;
-    }
-    
-    const desc = document.getElementById('description')?.value;
-    const ai = document.getElementById('amount')?.value;
-    const curr = document.getElementById('currency')?.value;
-    let amt;
-    
-    try {
-        const sa = curr.toLowerCase() === 'shm' ? parseFloat(ai) : parseFloat(ai) / shmPrice[curr.toLowerCase()];
-        amt = web3.utils.toWei(sa.toFixed(18), 'ether');
-    } catch {
-        em.textContent = 'Invalid amount.';
-        return;
-    }
-    
-    const st = document.getElementById('split')?.value;
-    let cs = [];
-    if (st === 'custom') {
-        try {
-            cs = document.getElementById('customShares')?.value.split(',').map(s => parseInt(s.trim()));
-            if (cs.reduce((s, v) => s + v, 0) !== 100) {
-                em.textContent = 'Shares must sum to 100%.';
-                return;
-            }
-            const result = await contract.methods.getGroup(gid).call();
-            const ms = result.members || result[1] || [];
-            if (cs.length !== ms.length) {
-                em.textContent = 'Shares count mismatch.';
-                return;
-            }
-        } catch {
-            em.textContent = 'Invalid shares format.';
-            return;
-        }
-    }
-    
-    try {
-        const tx = await contract.methods.addExpense(gid, desc, amt, st, cs).send({
-            from: await getAccount(),
-            value: '0',
-            gasPrice: web3.utils.toWei('50', 'gwei')
-        });
-        em.innerHTML = `<strong>Expense added!</strong> <a href="https://explorer-mezame.shardeum.org/tx/${tx.transactionHash}" target="_blank">View TX</a>`;
-        setTimeout(() => {
-            e.target.reset();
-            window.location.href = 'dashboard.html';
-        }, 2000);
-    } catch (err) {
-        em.textContent = 'Error: ' + err.message;
-    }
-}
-
-function getContract() {
-    return contract;
-}
-
-async function getAccount() {
-    if (!web3 || !window.ethereum) return null;
-    try {
-        const accs = await window.ethereum.request({ method: 'eth_accounts' });
-        return accs[0] || null;
-    } catch {
-        return null;
-    }
-}
-
-document.addEventListener('DOMContentLoaded', async () => {
-    document.querySelector('.metamask-button')?.addEventListener('click', handleMetaMaskToggle);
-    
-    const ef = document.getElementById('expenseForm');
-    if (ef) {
-        ef.addEventListener('submit', handleExpenseFormSubmit);
-        document.getElementById('split')?.addEventListener('change', toggleCustomShares);
-        document.getElementById('amount')?.addEventListener('input', updateShmAmount);
-        document.getElementById('currency')?.addEventListener('change', updateShmAmount);
-        await fetchShmPrice();
-    }
-    
-    const cgf = document.getElementById('createGroupForm');
-    if (cgf) {
-        cgf.addEventListener('submit', handleCreateGroupSubmit);
-        document.getElementById('addMemberButton')?.addEventListener('click', addMemberField);
-    }
-    
-    await checkMetaMaskConnection();
-}); [];
                 const gb = await createBlockie(gid.toString(), 64);
                 const mas = await Promise.all(mems.map(async a => ({
                     addr: a,
@@ -937,3 +593,260 @@ async function populateGroupsList() {
         gc.innerHTML = '<p>Error loading groups.</p>';
     }
 }
+
+async function populateGroupDropdown() {
+    const gs = document.getElementById('groupId');
+    if (!gs) return;
+    gs.innerHTML = '<option value="">Loading...</option>';
+    if (!web3 || !contract || !userAccount) {
+        gs.innerHTML = '<option value="">Connect wallet</option>';
+        return;
+    }
+    try {
+        const user = await getAccount();
+        const gc = parseInt(await contract.methods.groupCount().call()) || 0;
+        const gids = new Set();
+        
+        for (let i = 0; i < Math.min(gc, 50); i++) {
+            try {
+                const g = await contract.methods.userGroups(user, i).call();
+                if (g && parseInt(g) > 0) gids.add(g.toString());
+            } catch (e) {
+                if (e.message.includes('reverted')) break;
+            }
+        }
+        
+        for (let i = 1; i <= gc; i++) {
+            try {
+                const r = await contract.methods.getGroup(i).call();
+                const ms = r.members || r[1] || [];
+                if (ms.map(a => a.toLowerCase()).includes(user.toLowerCase())) gids.add(i.toString());
+            } catch {}
+        }
+        
+        gs.innerHTML = '<option value="">Select a group</option>';
+        if (gids.size === 0) {
+            gs.innerHTML += '<option value="" disabled>No groups - create one in Groups page</option>';
+        } else {
+            let hasActiveGroups = false;
+            for (let g of gids) {
+                try {
+                    const isSettled = await contract.methods.getGroupSettledStatus(g).call();
+                    if (isSettled) continue;
+                    
+                    hasActiveGroups = true;
+                    const r = await contract.methods.getGroup(g).call();
+                    const n = r.name || r[0] || 'Unnamed';
+                    const o = document.createElement('option');
+                    o.value = g;
+                    o.textContent = `${n} (${g})`;
+                    gs.appendChild(o);
+                } catch {}
+            }
+            
+            if (!hasActiveGroups) {
+                gs.innerHTML = '<option value="" disabled>All groups are settled - create a new one</option>';
+            }
+        }
+    } catch {
+        gs.innerHTML = '<option value="">Error loading groups</option>';
+    }
+}
+
+function toggleCustomShares() {
+    const s = document.getElementById('split');
+    const container = document.getElementById('customSharesContainer');
+    if (s && container) {
+        container.style.display = s.value === 'custom' ? 'block' : 'none';
+    }
+}
+
+function addMemberField() {
+    const mi = document.getElementById('memberInputs');
+    if (!mi || mi.children.length >= 10) return;
+    const memberNumber = mi.children.length + 1;
+    const d = document.createElement('div');
+    d.className = 'member-input';
+    d.innerHTML = `<span class="member-label">Member ${memberNumber}:</span><input type="text" class="member-name" placeholder="Member Name" required><input type="text" class="member-address" placeholder="0x..." required><button type="button" class="remove-member">Remove</button>`;
+    mi.appendChild(d);
+    d.querySelector('.remove-member').addEventListener('click', () => {
+        removeMember(d.querySelector('.remove-member'));
+        updateMemberNumbers();
+    });
+}
+
+function updateMemberNumbers() {
+    const mi = document.getElementById('memberInputs');
+    if (!mi) return;
+    const memberInputs = mi.querySelectorAll('.member-input');
+    memberInputs.forEach((input, index) => {
+        const label = input.querySelector('.member-label');
+        if (label) {
+            if (index === 0) {
+                label.textContent = 'Member 1 (You):';
+            } else {
+                label.textContent = `Member ${index + 1}:`;
+            }
+        }
+    });
+}
+
+function removeMember(btn) {
+    const mi = document.getElementById('memberInputs');
+    if (mi && mi.children.length > 2) btn.parentElement.remove();
+}
+
+async function handleCreateGroupSubmit(e) {
+    e.preventDefault();
+    const gm = document.getElementById('groupMessage');
+    if (!web3 || !contract || !userAccount) {
+        gm.textContent = 'Connect MetaMask first.';
+        return;
+    }
+    
+    const gn = document.getElementById('groupName')?.value;
+    const mis = document.getElementsByClassName('member-input');
+    if (!gn) {
+        gm.textContent = 'Enter group name.';
+        return;
+    }
+    
+    const mems = [], names = {};
+    const user = (await getAccount()).toLowerCase();
+    for (let mi of mis) {
+        const a = mi.querySelector('.member-address')?.value?.trim().toLowerCase();
+        const n = mi.querySelector('.member-name')?.value?.trim();
+        if (a && web3.utils.isAddress(a)) {
+            mems.push(a);
+            if (n && n !== 'Me') names[a] = n;
+        }
+    }
+    
+    if (mems.length < 2) {
+        gm.textContent = 'Need at least 2 members.';
+        return;
+    }
+    if (!mems.includes(user)) {
+        gm.textContent = 'Your address missing.';
+        return;
+    }
+    
+    const en = JSON.parse(localStorage.getItem('memberNames') || '{}');
+    localStorage.setItem('memberNames', JSON.stringify(Object.assign({}, en, names)));
+    
+    try {
+        const tx = await contract.methods.createGroup(gn, mems).send({
+            from: await getAccount(),
+            value: '0',
+            gasPrice: web3.utils.toWei('50', 'gwei')
+        });
+        gm.innerHTML = `<strong>Group created!</strong> <a href="https://explorer-mezame.shardeum.org/tx/${tx.transactionHash}" target="_blank">View TX</a>`;
+        gm.className = 'success-message';
+        setTimeout(() => {
+            e.target.reset();
+            populateGroupsList();
+        }, 2000);
+    } catch (err) {
+        gm.textContent = 'Error: ' + err.message;
+        gm.className = 'error-message';
+    }
+}
+
+async function handleExpenseFormSubmit(e) {
+    e.preventDefault();
+    const em = document.getElementById('expenseMessage');
+    if (!web3 || !contract || !userAccount) {
+        em.textContent = 'Connect MetaMask first.';
+        return;
+    }
+    
+    const gid = document.getElementById('groupId')?.value;
+    if (!gid) {
+        em.textContent = 'Please select a group.';
+        return;
+    }
+    
+    const desc = document.getElementById('description')?.value;
+    const ai = document.getElementById('amount')?.value;
+    const curr = document.getElementById('currency')?.value;
+    let amt;
+    
+    try {
+        const sa = curr.toLowerCase() === 'shm' ? parseFloat(ai) : parseFloat(ai) / shmPrice[curr.toLowerCase()];
+        amt = web3.utils.toWei(sa.toFixed(18), 'ether');
+    } catch {
+        em.textContent = 'Invalid amount.';
+        return;
+    }
+    
+    const st = document.getElementById('split')?.value;
+    let cs = [];
+    if (st === 'custom') {
+        try {
+            cs = document.getElementById('customShares')?.value.split(',').map(s => parseInt(s.trim()));
+            if (cs.reduce((s, v) => s + v, 0) !== 100) {
+                em.textContent = 'Shares must sum to 100%.';
+                return;
+            }
+            const result = await contract.methods.getGroup(gid).call();
+            const ms = result.members || result[1] || [];
+            if (cs.length !== ms.length) {
+                em.textContent = 'Shares count mismatch.';
+                return;
+            }
+        } catch {
+            em.textContent = 'Invalid shares format.';
+            return;
+        }
+    }
+    
+    try {
+        const tx = await contract.methods.addExpense(gid, desc, amt, st, cs).send({
+            from: await getAccount(),
+            value: '0',
+            gasPrice: web3.utils.toWei('50', 'gwei')
+        });
+        em.innerHTML = `<strong>Expense added!</strong> <a href="https://explorer-mezame.shardeum.org/tx/${tx.transactionHash}" target="_blank">View TX</a>`;
+        setTimeout(() => {
+            e.target.reset();
+            window.location.href = 'dashboard.html';
+        }, 2000);
+    } catch (err) {
+        em.textContent = 'Error: ' + err.message;
+    }
+}
+
+function getContract() {
+    return contract;
+}
+
+async function getAccount() {
+    if (!web3 || !window.ethereum) return null;
+    try {
+        const accs = await window.ethereum.request({ method: 'eth_accounts' });
+        return accs[0] || null;
+    } catch {
+        return null;
+    }
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+    document.querySelector('.metamask-button')?.addEventListener('click', handleMetaMaskToggle);
+    
+    const ef = document.getElementById('expenseForm');
+    if (ef) {
+        ef.addEventListener('submit', handleExpenseFormSubmit);
+        document.getElementById('split')?.addEventListener('change', toggleCustomShares);
+        document.getElementById('amount')?.addEventListener('input', updateShmAmount);
+        document.getElementById('currency')?.addEventListener('change', updateShmAmount);
+        await fetchShmPrice();
+    }
+    
+    const cgf = document.getElementById('createGroupForm');
+    if (cgf) {
+        cgf.addEventListener('submit', handleCreateGroupSubmit);
+        document.getElementById('addMemberButton')?.addEventListener('click', addMemberField);
+    }
+    
+    await checkMetaMaskConnection();
+});
