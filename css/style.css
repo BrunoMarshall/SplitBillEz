@@ -281,7 +281,7 @@ footer p {
 .settlement-line {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 5px;
     margin: 5px 0;
 }
 
@@ -612,6 +612,8 @@ footer p {
 }
 
 .expense-item-compact {
+    display: flex;
+    align-items: center;
     padding: 8px 12px;
     background: #f9fafb;
     border-radius: 6px;
@@ -650,6 +652,16 @@ footer p {
 .settle-message.error {
     background: #fee2e2;
     color: #991b1b;
+}
+
+/* Inline avatar styling for expenses and settlements */
+.inline-avatar {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    vertical-align: middle;
+    margin: 0 3px;
+    display: inline-block;
 }
 
 /* Groups Page Improvements */
@@ -957,6 +969,14 @@ footer p {
     flex-direction: column;
 }
 
+.shm-display {
+    background: #f0f9ff;
+    border: 2px solid #3b82f6;
+    border-radius: 8px;
+    padding: 15px;
+    margin: 15px 0;
+}
+
 .shm-display p {
     margin: 0;
     color: #1e40af;
@@ -1216,6 +1236,9 @@ footer p {
 }
 
 .transaction-payer {
+    display: flex;
+    align-items: center;
+    gap: 5px;
     color: #6b7280;
     font-size: 0.85em;
 }
@@ -1274,12 +1297,4 @@ footer p {
     .step-card {
         margin-bottom: 20px;
     }
-}-display {
-    background: #f0f9ff;
-    border: 2px solid #3b82f6;
-    border-radius: 8px;
-    padding: 15px;
-    margin: 15px 0;
 }
-
-.shm

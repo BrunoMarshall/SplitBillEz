@@ -228,11 +228,14 @@ async function populateDashboard() {
                 const exps = (await Promise.all(eids.map(async eid => {
                     try {
                         const e = await contract.methods.getExpense(eid).call();
+                        const payerAddr = e[3] || e.payer || 'Unknown';
+                        const payerAvatar = await createBlockie(payerAddr, 24, getMemberName(payerAddr)[0]);
                         return {
                             id: eid,
                             description: e[1] || e.description || 'N/A',
                             amount: web3.utils.fromWei(e[2] || e.amount || '0', 'ether'),
-                            payer: e[3] || e.payer || 'Unknown',
+                            payer: payerAddr,
+                            payerAvatar: payerAvatar,
                             splitType: e[4] || e.splitType || 'Unknown',
                             customShares: e[5] || e.customShares || []
                         };
@@ -284,13 +287,19 @@ async function populateDashboard() {
                         const tb = parseFloat(web3.utils.fromWei(bls[j].toString(), 'ether'));
                         if (tb <= 0) continue;
                         const d = Math.min(Math.abs(bal), tb);
-                        if (d > 0.01) sls.push({
-                            from: mems[i],
-                            to: mems[j],
-                            amount: d.toFixed(2),
-                            fromName: getMemberName(mems[i]),
-                            toName: getMemberName(mems[j])
-                        });
+                        if (d > 0.01) {
+                            const fromAvatar = await createBlockie(mems[i], 24, getMemberName(mems[i])[0]);
+                            const toAvatar = await createBlockie(mems[j], 24, getMemberName(mems[j])[0]);
+                            sls.push({
+                                from: mems[i],
+                                to: mems[j],
+                                amount: d.toFixed(2),
+                                fromName: getMemberName(mems[i]),
+                                toName: getMemberName(mems[j]),
+                                fromAvatar: fromAvatar,
+                                toAvatar: toAvatar
+                            });
+                        }
                     }
                 }
                 
@@ -336,14 +345,18 @@ async function populateDashboard() {
                             
                             <h4>Recent Expenses</h4>
                             <div class="expenses-list">
-                                ${exps.slice(-5).reverse().map(e => `<div class="expense-item-compact">${e.description} - ${e.amount} SHM (${getMemberName(e.payer)})</div>`).join('') || '<p>No expenses.</p>'}
+                                ${exps.slice(-5).reverse().map(e => `
+                                    <div class="expense-item-compact">
+                                        ${e.description} - ${e.amount} SHM (paid by <img src="${e.payerAvatar}" class="inline-avatar"> ${getMemberName(e.payer)} - ${e.splitType === 'equal' ? 'split equally' : 'custom split'})
+                                    </div>
+                                `).join('') || '<p>No expenses.</p>'}
                             </div>
                             
                             <h4>Settlement Status</h4>
                             <div class="settlement-container">
                                 ${sls.map(l => `
                                     <div class="settlement-line ${l.from.toLowerCase() === user.toLowerCase() ? 'negative' : 'positive'}">
-                                        ${l.fromName} → ${l.toName}: ${l.amount} SHM
+                                        <img src="${l.fromAvatar}" class="inline-avatar"> ${l.fromName} → <img src="${l.toAvatar}" class="inline-avatar"> ${l.toName}: ${l.amount} SHM
                                     </div>
                                 `).join('') || '<p class="all-settled">✓ All settled</p>'}
                             </div>
@@ -513,15 +526,19 @@ async function populateGroupsList() {
                 
                 const groupDiv = document.createElement('div');
                 groupDiv.className = isSettled ? 'group group-settled' : 'group';
-	if (isSettled) {
+                
+                if (isSettled) {
                     const eids = await contract.methods.getGroupExpenseIds(gid).call();
                     const expenses = await Promise.all(eids.map(async eid => {
                         try {
                             const e = await contract.methods.getExpense(eid).call();
+                            const payerAddr = e[3] || e.payer || 'Unknown';
+                            const payerAvatar = await createBlockie(payerAddr, 20, getMemberName(payerAddr)[0]);
                             return {
                                 description: e[1] || e.description || 'N/A',
                                 amount: web3.utils.fromWei(e[2] || e.amount || '0', 'ether'),
-                                payer: e[3] || e.payer || 'Unknown'
+                                payer: payerAddr,
+                                payerAvatar: payerAvatar
                             };
                         } catch (err) {
                             console.error('Error fetching expense:', eid, err);
@@ -548,7 +565,7 @@ async function populateGroupsList() {
                                                 <div class="transaction-item">
                                                     <span class="transaction-desc">${e.description}</span>
                                                     <span class="transaction-amount">${e.amount} SHM</span>
-                                                    <span class="transaction-payer">by ${getMemberName(e.payer)}</span>
+                                                    <span class="transaction-payer">by <img src="${e.payerAvatar}" class="inline-avatar"> ${getMemberName(e.payer)}</span>
                                                 </div>
                                             `).join('') || '<p>No transaction history available</p>'}
                                         </div>
@@ -688,7 +705,7 @@ function updateMemberNumbers() {
             if (index === 0) {
                 label.textContent = 'Member 1 (You):';
             } else {
-                label.textContent = `Member ${index + 1}:`;
+                label.textContent = `Member ${index + 1}:';
             }
         }
     });
