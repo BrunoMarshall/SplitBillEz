@@ -230,13 +230,14 @@ async function populateDashboard() {
                         const e = await contract.methods.getExpense(eid).call();
                         return {
                             id: eid,
-                            description: e.description || 'N/A',
-                            amount: web3.utils.fromWei(e.amount || '0', 'ether'),
-                            payer: e.payer || 'Unknown',
-                            splitType: e.splitType || 'Unknown',
-                            customShares: e.customShares || []
+                            description: e[1] || e.description || 'N/A',
+                            amount: web3.utils.fromWei(e[2] || e.amount || '0', 'ether'),
+                            payer: e[3] || e.payer || 'Unknown',
+                            splitType: e[4] || e.splitType || 'Unknown',
+                            customShares: e[5] || e.customShares || []
                         };
-                    } catch {
+                    } catch (err) {
+                        console.error('Error fetching expense:', eid, err);
                         return null;
                     }
                 }))).filter(e => e);
@@ -379,7 +380,9 @@ async function populateDashboard() {
                         const tx = await contract.methods.settleDebt(gid, t, a).send({
                             from: await getAccount(),
                             value: '0',
-                            gasPrice: web3.utils.toWei('50', 'gwei')
+                            maxPriorityFeePerGas: web3.utils.toWei('2500000', 'gwei'),
+                            maxFeePerGas: web3.utils.toWei('2500000', 'gwei'),
+                            gas: 800000
                         });
                         m.textContent = 'Settled! TX: ' + tx.transactionHash;
                         m.className = 'settle-message success';
@@ -510,18 +513,18 @@ async function populateGroupsList() {
                 
                 const groupDiv = document.createElement('div');
                 groupDiv.className = isSettled ? 'group group-settled' : 'group';
-                
-                if (isSettled) {
+	if (isSettled) {
                     const eids = await contract.methods.getGroupExpenseIds(gid).call();
                     const expenses = await Promise.all(eids.map(async eid => {
                         try {
                             const e = await contract.methods.getExpense(eid).call();
                             return {
-                                description: e.description,
-                                amount: web3.utils.fromWei(e.amount || '0', 'ether'),
-                                payer: e.payer
+                                description: e[1] || e.description || 'N/A',
+                                amount: web3.utils.fromWei(e[2] || e.amount || '0', 'ether'),
+                                payer: e[3] || e.payer || 'Unknown'
                             };
-                        } catch {
+                        } catch (err) {
+                            console.error('Error fetching expense:', eid, err);
                             return null;
                         }
                     }));
@@ -738,7 +741,9 @@ async function handleCreateGroupSubmit(e) {
         const tx = await contract.methods.createGroup(gn, mems).send({
             from: await getAccount(),
             value: '0',
-            gasPrice: web3.utils.toWei('50', 'gwei')
+            maxPriorityFeePerGas: web3.utils.toWei('2500000', 'gwei'),
+            maxFeePerGas: web3.utils.toWei('2500000', 'gwei'),
+            gas: 800000
         });
         gm.innerHTML = `<strong>Group created!</strong> <a href="https://explorer-mezame.shardeum.org/tx/${tx.transactionHash}" target="_blank">View TX</a>`;
         gm.className = 'success-message';
@@ -804,7 +809,9 @@ async function handleExpenseFormSubmit(e) {
         const tx = await contract.methods.addExpense(gid, desc, amt, st, cs).send({
             from: await getAccount(),
             value: '0',
-            gasPrice: web3.utils.toWei('50', 'gwei')
+            maxPriorityFeePerGas: web3.utils.toWei('2500000', 'gwei'),
+            maxFeePerGas: web3.utils.toWei('2500000', 'gwei'),
+            gas: 800000
         });
         em.innerHTML = `<strong>Expense added!</strong> <a href="https://explorer-mezame.shardeum.org/tx/${tx.transactionHash}" target="_blank">View TX</a>`;
         setTimeout(() => {
