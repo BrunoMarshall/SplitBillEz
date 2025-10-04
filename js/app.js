@@ -1,9 +1,9 @@
 // app.js - Shared Web3 Integration for SplitBillEz
-const CONTRACT_ADDRESS = '0x830a1f8462e1ba47978251e7074faacb0bb39a87';
-const CONTRACT_ABI = [{"inputs":[],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"uint256","name":"expenseId","type":"uint256"},{"indexed":true,"internalType":"uint256","name":"groupId","type":"uint256"},{"indexed":false,"internalType":"string","name":"description","type":"string"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"},{"indexed":false,"internalType":"address","name":"payer","type":"address"},{"indexed":false,"internalType":"string","name":"splitType","type":"string"},{"indexed":false,"internalType":"uint256[]","name":"customShares","type":"uint256[]"}],"name":"ExpenseAdded","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"uint256","name":"groupId","type":"uint256"},{"indexed":false,"internalType":"string","name":"name","type":"string"},{"indexed":false,"internalType":"address[]","name":"members","type":"address[]"}],"name":"GroupCreated","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"uint256","name":"groupId","type":"uint256"},{"indexed":false,"internalType":"address","name":"debtor","type":"address"},{"indexed":false,"internalType":"address","name":"creditor","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"DebtRecorded","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"uint256","name":"groupId","type":"uint256"},{"indexed":false,"internalType":"address","name":"from","type":"address"},{"indexed":false,"internalType":"address","name":"to","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"DebtSettled","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"uint256","name":"groupId","type":"uint256"}],"name":"GroupSettled","type":"event"},{"inputs":[{"internalType":"uint256","name":"_groupId","type":"uint256"},{"internalType":"string","name":"_description","type":"string"},{"internalType":"uint256","name":"_amount","type":"uint256"},{"internalType":"string","name":"_splitType","type":"string"},{"internalType":"uint256[]","name":"_customShares","type":"uint256[]"}],"name":"addExpense","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"string","name":"_name","type":"string"},{"internalType":"address[]","name":"_members","type":"address[]"}],"name":"createGroup","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"_expenseId","type":"uint256"}],"name":"getExpense","outputs":[{"internalType":"uint256","name":"groupId","type":"uint256"},{"internalType":"string","name":"description","type":"string"},{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"address","name":"payer","type":"address"},{"internalType":"string","name":"splitType","type":"string"},{"internalType":"uint256[]","name":"customShares","type":"uint256[]"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"_groupId","type":"uint256"}],"name":"getGroup","outputs":[{"internalType":"string","name":"name","type":"string"},{"internalType":"address[]","name":"members","type":"address[]"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"_groupId","type":"uint256"}],"name":"getGroupBalances","outputs":[{"internalType":"address[]","name":"members","type":"address[]"},{"internalType":"int256[]","name":"bals","type":"int256[]"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"_groupId","type":"uint256"}],"name":"getGroupExpenseIds","outputs":[{"internalType":"uint256[]","name":"","type":"uint256[]"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"_groupId","type":"uint256"}],"name":"getGroupSettledStatus","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"_groupId","type":"uint256"},{"internalType":"address","name":"_to","type":"address"},{"internalType":"uint256","name":"_amount","type":"uint256"}],"name":"settleDebt","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"expenseCount","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"groupCount","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"ownerWithdraw","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"},{"internalType":"uint256","name":"","type":"uint256"}],"name":"userGroups","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}];
+const CONTRACT_ADDRESS = '0x7f8f279841899b6abf34956658403bd597688d59';
+const CONTRACT_ABI = [{"inputs":[],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"uint256","name":"groupId","type":"uint256"},{"indexed":false,"internalType":"address","name":"debtor","type":"address"},{"indexed":false,"internalType":"address","name":"creditor","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"DebtRecorded","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"uint256","name":"groupId","type":"uint256"},{"indexed":false,"internalType":"address","name":"from","type":"address"},{"indexed":false,"internalType":"address","name":"to","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"DebtSettled","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"uint256","name":"expenseId","type":"uint256"},{"indexed":true,"internalType":"uint256","name":"groupId","type":"uint256"},{"indexed":false,"internalType":"string","name":"description","type":"string"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"},{"indexed":false,"internalType":"address","name":"payer","type":"address"},{"indexed":false,"internalType":"string","name":"splitType","type":"string"},{"indexed":false,"internalType":"uint256[]","name":"customShares","type":"uint256[]"}],"name":"ExpenseAdded","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"uint256","name":"groupId","type":"uint256"},{"indexed":false,"internalType":"string","name":"name","type":"string"},{"indexed":false,"internalType":"address[]","name":"members","type":"address[]"}],"name":"GroupCreated","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"uint256","name":"groupId","type":"uint256"}],"name":"GroupSettled","type":"event"},{"inputs":[{"internalType":"uint256","name":"_groupId","type":"uint256"},{"internalType":"string","name":"_description","type":"string"},{"internalType":"uint256","name":"_amount","type":"uint256"},{"internalType":"string","name":"_splitType","type":"string"},{"internalType":"uint256[]","name":"_customShares","type":"uint256[]"}],"name":"addExpense","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"},{"internalType":"uint256","name":"","type":"uint256"}],"name":"balances","outputs":[{"internalType":"int256","name":"","type":"int256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"string","name":"_name","type":"string"},{"internalType":"address[]","name":"_members","type":"address[]"}],"name":"createGroup","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"expenseCount","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"expenses","outputs":[{"internalType":"uint256","name":"groupId","type":"uint256"},{"internalType":"string","name":"description","type":"string"},{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"address","name":"payer","type":"address"},{"internalType":"string","name":"splitType","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"_expenseId","type":"uint256"}],"name":"getExpense","outputs":[{"internalType":"uint256","name":"","type":"uint256"},{"internalType":"string","name":"","type":"string"},{"internalType":"uint256","name":"","type":"uint256"},{"internalType":"address","name":"","type":"address"},{"internalType":"string","name":"","type":"string"},{"internalType":"uint256[]","name":"","type":"uint256[]"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"_groupId","type":"uint256"}],"name":"getGroup","outputs":[{"internalType":"string","name":"","type":"string"},{"internalType":"address[]","name":"","type":"address[]"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"_groupId","type":"uint256"}],"name":"getGroupBalances","outputs":[{"internalType":"address[]","name":"","type":"address[]"},{"internalType":"int256[]","name":"","type":"int256[]"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"_groupId","type":"uint256"}],"name":"getGroupExpenseIds","outputs":[{"internalType":"uint256[]","name":"","type":"uint256[]"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"_groupId","type":"uint256"}],"name":"getGroupSettledStatus","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"groupCount","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"groupExpenseIds","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"groups","outputs":[{"internalType":"string","name":"name","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"isGroupSettled","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"ownerWithdraw","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"_groupId","type":"uint256"},{"internalType":"address","name":"_to","type":"address"},{"internalType":"uint256","name":"_amount","type":"uint256"}],"name":"settleDebt","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"},{"internalType":"uint256","name":"","type":"uint256"}],"name":"userGroups","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}];
 
 let web3, userAccount, contract, shmPrice = null;
-const RPC_URLS = ['https://api-unstable.shardeum.org', 'https://cycle3.api.shardeum.org', 'https://dapps.shardeum.org'];
+const RPC_URLS = ['https://api-mezame.shardeum.org/'];
 
 async function initWeb3(rpcIndex = 0) {
     if (!window.ethereum) {
@@ -12,11 +12,11 @@ async function initWeb3(rpcIndex = 0) {
     }
     try {
         web3 = new Web3(window.ethereum);
-        await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x1f90' }] }).catch(async (e) => {
+        await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x1fb7' }] }).catch(async (e) => {
             if (e.code === 4902) {
                 await window.ethereum.request({
                     method: 'wallet_addEthereumChain',
-                    params: [{ chainId: '0x1f90', chainName: 'Shardeum Unstable Testnet', rpcUrls: [RPC_URLS[rpcIndex]], nativeCurrency: { name: 'SHM', symbol: 'SHM', decimals: 18 }, blockExplorerUrls: ['https://explorer-unstable.shardeum.org'] }]
+                    params: [{ chainId: '0x1fb7', chainName: 'Shardeum EVM Testnet', rpcUrls: [RPC_URLS[rpcIndex]], nativeCurrency: { name: 'SHM', symbol: 'SHM', decimals: 18 }, blockExplorerUrls: ['https://explorer-mezame.shardeum.org/'] }]
                 });
             }
         });
@@ -214,6 +214,350 @@ async function populateDashboard() {
                 const r = await contract.methods.getGroup(gid).call();
                 const name = r.name || r[0] || 'Unnamed';
                 const mems = r.members || r[1] || [];
+                const gb = await createBlockie(gid.toString(), 48);
+                
+                const groupDiv = document.createElement('div');
+                groupDiv.className = isSettled ? 'group group-settled' : 'group';
+                
+                if (isSettled) {
+                    const eids = await contract.methods.getGroupExpenseIds(gid).call();
+                    const expenses = await Promise.all(eids.map(async eid => {
+                        try {
+                            const e = await contract.methods.getExpense(eid).call();
+                            return {
+                                description: e.description,
+                                amount: web3.utils.fromWei(e.amount || '0', 'ether'),
+                                payer: e.payer
+                            };
+                        } catch {
+                            return null;
+                        }
+                    }));
+                    
+                    groupDiv.innerHTML = `
+                        <div class="group-list-item">
+                            <img src="${gb}" class="group-avatar-small">
+                            <div class="group-info">
+                                <h4>${name} <span class="settled-badge">✓ Settled</span></h4>
+                                <p><strong>ID:</strong> ${gid} | <strong>Members:</strong> ${mems.length} | <strong>Expenses:</strong> ${expenses.filter(e => e).length}</p>
+                                <details class="group-history-details">
+                                    <summary>View Full History</summary>
+                                    <div class="history-content">
+                                        <h5>Members</h5>
+                                        <ul class="members-list">
+                                            ${mems.map(m => `<li>${getMemberName(m)} (${truncateAddress(m)})</li>`).join('')}
+                                        </ul>
+                                        <h5>Transaction History</h5>
+                                        <div class="transaction-history">
+                                            ${expenses.filter(e => e).map(e => `
+                                                <div class="transaction-item">
+                                                    <span class="transaction-desc">${e.description}</span>
+                                                    <span class="transaction-amount">${e.amount} SHM</span>
+                                                    <span class="transaction-payer">by ${getMemberName(e.payer)}</span>
+                                                </div>
+                                            `).join('') || '<p>No transaction history available</p>'}
+                                        </div>
+                                        <div class="settlement-info">
+                                            <p class="settlement-status">✓ All debts have been settled</p>
+                                            <a href="https://explorer-mezame.shardeum.org/address/${CONTRACT_ADDRESS}" target="_blank" class="explorer-link">
+                                                View on Explorer →
+                                            </a>
+                                        </div>
+                                    </div>
+                                </details>
+                            </div>
+                        </div>
+                    `;
+                    settledDiv.appendChild(groupDiv);
+                    hasSettled = true;
+                } else {
+                    groupDiv.innerHTML = `
+                        <div class="group-list-item">
+                            <img src="${gb}" class="group-avatar-small">
+                            <div class="group-info">
+                                <h4>${name}</h4>
+                                <p><strong>ID:</strong> ${gid} | <strong>Members:</strong> ${mems.length}</p>
+                                <details>
+                                    <summary>Show Members</summary>
+                                    <ul class="members-list">
+                                        ${mems.map(m => `<li>${getMemberName(m)} (${truncateAddress(m)})</li>`).join('')}
+                                    </ul>
+                                </details>
+                            </div>
+                        </div>
+                    `;
+                    activeDiv.appendChild(groupDiv);
+                    hasActive = true;
+                }
+            } catch (e) {
+                console.error('Error loading group:', e);
+            }
+        }
+        
+        if (!hasActive) activeDiv.innerHTML += '<p>No active groups.</p>';
+        if (!hasSettled) settledDiv.innerHTML += '<p>No settled groups yet.</p>';
+        
+    } catch (e) {
+        gc.innerHTML = '<p>Error loading groups.</p>';
+    }
+}
+
+async function populateGroupDropdown() {
+    const gs = document.getElementById('groupId');
+    if (!gs) return;
+    gs.innerHTML = '<option value="">Loading...</option>';
+    if (!web3 || !contract || !userAccount) {
+        gs.innerHTML = '<option value="">Connect wallet</option>';
+        return;
+    }
+    try {
+        const user = await getAccount();
+        const gc = parseInt(await contract.methods.groupCount().call()) || 0;
+        const gids = new Set();
+        
+        for (let i = 0; i < Math.min(gc, 50); i++) {
+            try {
+                const g = await contract.methods.userGroups(user, i).call();
+                if (g && parseInt(g) > 0) gids.add(g.toString());
+            } catch (e) {
+                if (e.message.includes('reverted')) break;
+            }
+        }
+        
+        for (let i = 1; i <= gc; i++) {
+            try {
+                const r = await contract.methods.getGroup(i).call();
+                const ms = r.members || r[1] || [];
+                if (ms.map(a => a.toLowerCase()).includes(user.toLowerCase())) gids.add(i.toString());
+            } catch {}
+        }
+        
+        gs.innerHTML = '<option value="">Select a group</option>';
+        if (gids.size === 0) {
+            gs.innerHTML += '<option value="" disabled>No groups - create one in Groups page</option>';
+        } else {
+            let hasActiveGroups = false;
+            for (let g of gids) {
+                try {
+                    const isSettled = await contract.methods.getGroupSettledStatus(g).call();
+                    if (isSettled) continue;
+                    
+                    hasActiveGroups = true;
+                    const r = await contract.methods.getGroup(g).call();
+                    const n = r.name || r[0] || 'Unnamed';
+                    const o = document.createElement('option');
+                    o.value = g;
+                    o.textContent = `${n} (${g})`;
+                    gs.appendChild(o);
+                } catch {}
+            }
+            
+            if (!hasActiveGroups) {
+                gs.innerHTML = '<option value="" disabled>All groups are settled - create a new one</option>';
+            }
+        }
+    } catch {
+        gs.innerHTML = '<option value="">Error loading groups</option>';
+    }
+}
+
+function toggleCustomShares() {
+    const s = document.getElementById('split');
+    const container = document.getElementById('customSharesContainer');
+    if (s && container) {
+        container.style.display = s.value === 'custom' ? 'block' : 'none';
+    }
+}
+
+function addMemberField() {
+    const mi = document.getElementById('memberInputs');
+    if (!mi || mi.children.length >= 10) return;
+    const memberNumber = mi.children.length + 1;
+    const d = document.createElement('div');
+    d.className = 'member-input';
+    d.innerHTML = `<span class="member-label">Member ${memberNumber}:</span><input type="text" class="member-name" placeholder="Member Name" required><input type="text" class="member-address" placeholder="0x..." required><button type="button" class="remove-member">Remove</button>`;
+    mi.appendChild(d);
+    d.querySelector('.remove-member').addEventListener('click', () => {
+        removeMember(d.querySelector('.remove-member'));
+        updateMemberNumbers();
+    });
+}
+
+function updateMemberNumbers() {
+    const mi = document.getElementById('memberInputs');
+    if (!mi) return;
+    const memberInputs = mi.querySelectorAll('.member-input');
+    memberInputs.forEach((input, index) => {
+        const label = input.querySelector('.member-label');
+        if (label) {
+            if (index === 0) {
+                label.textContent = 'Member 1 (You):';
+            } else {
+                label.textContent = `Member ${index + 1}:`;
+            }
+        }
+    });
+}
+
+function removeMember(btn) {
+    const mi = document.getElementById('memberInputs');
+    if (mi && mi.children.length > 2) btn.parentElement.remove();
+}
+
+async function handleCreateGroupSubmit(e) {
+    e.preventDefault();
+    const gm = document.getElementById('groupMessage');
+    if (!web3 || !contract || !userAccount) {
+        gm.textContent = 'Connect MetaMask first.';
+        return;
+    }
+    
+    const gn = document.getElementById('groupName')?.value;
+    const mis = document.getElementsByClassName('member-input');
+    if (!gn) {
+        gm.textContent = 'Enter group name.';
+        return;
+    }
+    
+    const mems = [], names = {};
+    const user = (await getAccount()).toLowerCase();
+    for (let mi of mis) {
+        const a = mi.querySelector('.member-address')?.value?.trim().toLowerCase();
+        const n = mi.querySelector('.member-name')?.value?.trim();
+        if (a && web3.utils.isAddress(a)) {
+            mems.push(a);
+            if (n && n !== 'Me') names[a] = n;
+        }
+    }
+    
+    if (mems.length < 2) {
+        gm.textContent = 'Need at least 2 members.';
+        return;
+    }
+    if (!mems.includes(user)) {
+        gm.textContent = 'Your address missing.';
+        return;
+    }
+    
+    const en = JSON.parse(localStorage.getItem('memberNames') || '{}');
+    localStorage.setItem('memberNames', JSON.stringify(Object.assign({}, en, names)));
+    
+    try {
+        const tx = await contract.methods.createGroup(gn, mems).send({
+            from: await getAccount(),
+            value: '0',
+            gasPrice: web3.utils.toWei('50', 'gwei')
+        });
+        gm.innerHTML = `<strong>Group created!</strong> <a href="https://explorer-mezame.shardeum.org/tx/${tx.transactionHash}" target="_blank">View TX</a>`;
+        gm.className = 'success-message';
+        setTimeout(() => {
+            e.target.reset();
+            populateGroupsList();
+        }, 2000);
+    } catch (err) {
+        gm.textContent = 'Error: ' + err.message;
+        gm.className = 'error-message';
+    }
+}
+
+async function handleExpenseFormSubmit(e) {
+    e.preventDefault();
+    const em = document.getElementById('expenseMessage');
+    if (!web3 || !contract || !userAccount) {
+        em.textContent = 'Connect MetaMask first.';
+        return;
+    }
+    
+    const gid = document.getElementById('groupId')?.value;
+    if (!gid) {
+        em.textContent = 'Please select a group.';
+        return;
+    }
+    
+    const desc = document.getElementById('description')?.value;
+    const ai = document.getElementById('amount')?.value;
+    const curr = document.getElementById('currency')?.value;
+    let amt;
+    
+    try {
+        const sa = curr.toLowerCase() === 'shm' ? parseFloat(ai) : parseFloat(ai) / shmPrice[curr.toLowerCase()];
+        amt = web3.utils.toWei(sa.toFixed(18), 'ether');
+    } catch {
+        em.textContent = 'Invalid amount.';
+        return;
+    }
+    
+    const st = document.getElementById('split')?.value;
+    let cs = [];
+    if (st === 'custom') {
+        try {
+            cs = document.getElementById('customShares')?.value.split(',').map(s => parseInt(s.trim()));
+            if (cs.reduce((s, v) => s + v, 0) !== 100) {
+                em.textContent = 'Shares must sum to 100%.';
+                return;
+            }
+            const result = await contract.methods.getGroup(gid).call();
+            const ms = result.members || result[1] || [];
+            if (cs.length !== ms.length) {
+                em.textContent = 'Shares count mismatch.';
+                return;
+            }
+        } catch {
+            em.textContent = 'Invalid shares format.';
+            return;
+        }
+    }
+    
+    try {
+        const tx = await contract.methods.addExpense(gid, desc, amt, st, cs).send({
+            from: await getAccount(),
+            value: '0',
+            gasPrice: web3.utils.toWei('50', 'gwei')
+        });
+        em.innerHTML = `<strong>Expense added!</strong> <a href="https://explorer-mezame.shardeum.org/tx/${tx.transactionHash}" target="_blank">View TX</a>`;
+        setTimeout(() => {
+            e.target.reset();
+            window.location.href = 'dashboard.html';
+        }, 2000);
+    } catch (err) {
+        em.textContent = 'Error: ' + err.message;
+    }
+}
+
+function getContract() {
+    return contract;
+}
+
+async function getAccount() {
+    if (!web3 || !window.ethereum) return null;
+    try {
+        const accs = await window.ethereum.request({ method: 'eth_accounts' });
+        return accs[0] || null;
+    } catch {
+        return null;
+    }
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+    document.querySelector('.metamask-button')?.addEventListener('click', handleMetaMaskToggle);
+    
+    const ef = document.getElementById('expenseForm');
+    if (ef) {
+        ef.addEventListener('submit', handleExpenseFormSubmit);
+        document.getElementById('split')?.addEventListener('change', toggleCustomShares);
+        document.getElementById('amount')?.addEventListener('input', updateShmAmount);
+        document.getElementById('currency')?.addEventListener('change', updateShmAmount);
+        await fetchShmPrice();
+    }
+    
+    const cgf = document.getElementById('createGroupForm');
+    if (cgf) {
+        cgf.addEventListener('submit', handleCreateGroupSubmit);
+        document.getElementById('addMemberButton')?.addEventListener('click', addMemberField);
+    }
+    
+    await checkMetaMaskConnection();
+}); [];
                 const gb = await createBlockie(gid.toString(), 64);
                 const mas = await Promise.all(mems.map(async a => ({
                     addr: a,
@@ -454,6 +798,7 @@ function updateShmAmount() {
     const c = cs.value.toLowerCase();
     sa.textContent = `SHM Amount: ${(c === 'shm' ? a : a / shmPrice[c]).toFixed(4)} SHM`;
 }
+
 async function populateGroupsList() {
     const gc = document.getElementById('groupsContent');
     if (!gc) return;
@@ -511,7 +856,6 @@ async function populateGroupsList() {
                 groupDiv.className = isSettled ? 'group group-settled' : 'group';
                 
                 if (isSettled) {
-                    // Get transaction history for settled groups
                     const eids = await contract.methods.getGroupExpenseIds(gid).call();
                     const expenses = await Promise.all(eids.map(async eid => {
                         try {
@@ -551,7 +895,7 @@ async function populateGroupsList() {
                                         </div>
                                         <div class="settlement-info">
                                             <p class="settlement-status">✓ All debts have been settled</p>
-                                            <a href="https://explorer-unstable.shardeum.org/address/${CONTRACT_ADDRESS}" target="_blank" class="explorer-link">
+                                            <a href="https://explorer-mezame.shardeum.org/address/${CONTRACT_ADDRESS}" target="_blank" class="explorer-link">
                                                 View on Explorer →
                                             </a>
                                         </div>
@@ -593,257 +937,3 @@ async function populateGroupsList() {
         gc.innerHTML = '<p>Error loading groups.</p>';
     }
 }
-
-async function populateGroupDropdown() {
-    const gs = document.getElementById('groupId');
-    if (!gs) return;
-    gs.innerHTML = '<option value="">Loading...</option>';
-    if (!web3 || !contract || !userAccount) {
-        gs.innerHTML = '<option value="">Connect wallet</option>';
-        return;
-    }
-    try {
-        const user = await getAccount();
-        const gc = parseInt(await contract.methods.groupCount().call()) || 0;
-        const gids = new Set();
-        
-        for (let i = 0; i < Math.min(gc, 50); i++) {
-            try {
-                const g = await contract.methods.userGroups(user, i).call();
-                if (g && parseInt(g) > 0) gids.add(g.toString());
-            } catch (e) {
-                if (e.message.includes('reverted')) break;
-            }
-        }
-        
-        for (let i = 1; i <= gc; i++) {
-            try {
-                const r = await contract.methods.getGroup(i).call();
-                const ms = r.members || r[1] || [];
-                if (ms.map(a => a.toLowerCase()).includes(user.toLowerCase())) gids.add(i.toString());
-            } catch {}
-        }
-        
-        gs.innerHTML = '<option value="">Select a group</option>';
-        if (gids.size === 0) {
-            gs.innerHTML += '<option value="" disabled>No groups - create one in Groups page</option>';
-        } else {
-            let hasActiveGroups = false;
-            for (let g of gids) {
-                try {
-                    const isSettled = await contract.methods.getGroupSettledStatus(g).call();
-                    if (isSettled) continue;
-                    
-                    hasActiveGroups = true;
-                    const r = await contract.methods.getGroup(g).call();
-                    const n = r.name || r[0] || 'Unnamed';
-                    const o = document.createElement('option');
-                    o.value = g;
-                    o.textContent = `${n} (${g})`;
-                    gs.appendChild(o);
-                } catch {}
-            }
-            
-            if (!hasActiveGroups) {
-                gs.innerHTML = '<option value="" disabled>All groups are settled - create a new one</option>';
-            }
-        }
-    } catch {
-        gs.innerHTML = '<option value="">Error loading groups</option>';
-    }
-}
-function toggleCustomShares() {
-    const s = document.getElementById('split');
-    const container = document.getElementById('customSharesContainer');
-    if (s && container) {
-        container.style.display = s.value === 'custom' ? 'block' : 'none';
-    }
-}
-function addMemberField() {
-    const mi = document.getElementById('memberInputs');
-    if (!mi || mi.children.length >= 10) return;
-    const memberNumber = mi.children.length + 1;
-    const d = document.createElement('div');
-    d.className = 'member-input';
-    d.innerHTML = `<span class="member-label">Member ${memberNumber}:</span><input type="text" class="member-name" placeholder="Member Name" required><input type="text" class="member-address" placeholder="0x..." required><button type="button" class="remove-member">Remove</button>`;
-    mi.appendChild(d);
-    d.querySelector('.remove-member').addEventListener('click', () => {
-        removeMember(d.querySelector('.remove-member'));
-        updateMemberNumbers();
-    });
-}
-// Add new function to update member numbers
-function updateMemberNumbers() {
-    const mi = document.getElementById('memberInputs');
-    if (!mi) return;
-    const memberInputs = mi.querySelectorAll('.member-input');
-    memberInputs.forEach((input, index) => {
-        const label = input.querySelector('.member-label');
-        if (label) {
-            if (index === 0) {
-                label.textContent = 'Member 1 (You):';
-            } else {
-                label.textContent = `Member ${index + 1}:`;
-            }
-        }
-    });
-}
-function removeMember(btn) {
-    const mi = document.getElementById('memberInputs');
-    if (mi && mi.children.length > 2) btn.parentElement.remove();
-}
-
-async function handleCreateGroupSubmit(e) {
-    e.preventDefault();
-    const gm = document.getElementById('groupMessage');
-    if (!web3 || !contract || !userAccount) {
-        gm.textContent = 'Connect MetaMask first.';
-        return;
-    }
-    
-    const gn = document.getElementById('groupName')?.value;
-    const mis = document.getElementsByClassName('member-input');
-    if (!gn) {
-        gm.textContent = 'Enter group name.';
-        return;
-    }
-    
-    const mems = [], names = {};
-    const user = (await getAccount()).toLowerCase();
-    for (let mi of mis) {
-        const a = mi.querySelector('.member-address')?.value?.trim().toLowerCase();
-        const n = mi.querySelector('.member-name')?.value?.trim();
-        if (a && web3.utils.isAddress(a)) {
-            mems.push(a);
-            if (n && n !== 'Me') names[a] = n;
-        }
-    }
-    
-    if (mems.length < 2) {
-        gm.textContent = 'Need at least 2 members.';
-        return;
-    }
-    if (!mems.includes(user)) {
-        gm.textContent = 'Your address missing.';
-        return;
-    }
-    
-    const en = JSON.parse(localStorage.getItem('memberNames') || '{}');
-    localStorage.setItem('memberNames', JSON.stringify(Object.assign({}, en, names)));
-    
-    try {
-        const tx = await contract.methods.createGroup(gn, mems).send({
-            from: await getAccount(),
-            value: '0',
-            gasPrice: web3.utils.toWei('50', 'gwei')
-        });
-        gm.innerHTML = `<strong>Group created!</strong> <a href="https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}" target="_blank">View TX</a>`;
-        gm.className = 'success-message';
-        setTimeout(() => {
-            e.target.reset();
-            populateGroupsList();
-        }, 2000);
-    } catch (err) {
-        gm.textContent = 'Error: ' + err.message;
-        gm.className = 'error-message';
-    }
-}
-
-async function handleExpenseFormSubmit(e) {
-    e.preventDefault();
-    const em = document.getElementById('expenseMessage');
-    if (!web3 || !contract || !userAccount) {
-        em.textContent = 'Connect MetaMask first.';
-        return;
-    }
-    
-    const gid = document.getElementById('groupId')?.value;
-    if (!gid) {
-        em.textContent = 'Please select a group.';
-        return;
-    }
-    
-    const desc = document.getElementById('description')?.value;
-    const ai = document.getElementById('amount')?.value;
-    const curr = document.getElementById('currency')?.value;
-    let amt;
-    
-    try {
-        const sa = curr.toLowerCase() === 'shm' ? parseFloat(ai) : parseFloat(ai) / shmPrice[curr.toLowerCase()];
-        amt = web3.utils.toWei(sa.toFixed(18), 'ether');
-    } catch {
-        em.textContent = 'Invalid amount.';
-        return;
-    }
-    
-    const st = document.getElementById('split')?.value;
-    let cs = [];
-    if (st === 'custom') {
-        try {
-            cs = document.getElementById('customShares')?.value.split(',').map(s => parseInt(s.trim()));
-            if (cs.reduce((s, v) => s + v, 0) !== 100) {
-                em.textContent = 'Shares must sum to 100%.';
-                return;
-            }
-            const result = await contract.methods.getGroup(gid).call();
-            const ms = result.members || result[1] || [];
-            if (cs.length !== ms.length) {
-                em.textContent = 'Shares count mismatch.';
-                return;
-            }
-        } catch {
-            em.textContent = 'Invalid shares format.';
-            return;
-        }
-    }
-    
-    try {
-        const tx = await contract.methods.addExpense(gid, desc, amt, st, cs).send({
-            from: await getAccount(),
-            value: '0',
-            gasPrice: web3.utils.toWei('50', 'gwei')
-        });
-        em.innerHTML = `<strong>Expense added!</strong> <a href="https://explorer-unstable.shardeum.org/tx/${tx.transactionHash}" target="_blank">View TX</a>`;
-        setTimeout(() => {
-            e.target.reset();
-            window.location.href = 'dashboard.html';
-        }, 2000);
-    } catch (err) {
-        em.textContent = 'Error: ' + err.message;
-    }
-}
-
-function getContract() {
-    return contract;
-}
-
-async function getAccount() {
-    if (!web3 || !window.ethereum) return null;
-    try {
-        const accs = await window.ethereum.request({ method: 'eth_accounts' });
-        return accs[0] || null;
-    } catch {
-        return null;
-    }
-}
-
-document.addEventListener('DOMContentLoaded', async () => {
-    document.querySelector('.metamask-button')?.addEventListener('click', handleMetaMaskToggle);
-    
-    const ef = document.getElementById('expenseForm');
-    if (ef) {
-        ef.addEventListener('submit', handleExpenseFormSubmit);
-        document.getElementById('split')?.addEventListener('change', toggleCustomShares);
-        document.getElementById('amount')?.addEventListener('input', updateShmAmount);
-        document.getElementById('currency')?.addEventListener('change', updateShmAmount);
-        await fetchShmPrice();
-    }
-    
-    const cgf = document.getElementById('createGroupForm');
-    if (cgf) {
-        cgf.addEventListener('submit', handleCreateGroupSubmit);
-        document.getElementById('addMemberButton')?.addEventListener('click', addMemberField);
-    }
-    
-    await checkMetaMaskConnection();
-});
