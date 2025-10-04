@@ -303,6 +303,8 @@ async function populateDashboard() {
                     }
                 }
                 
+                const totalSpent = exps.reduce((sum, e) => sum + parseFloat(e.amount), 0);
+                
                 const gd = document.createElement('div');
                 gd.className = 'group group-card';
                 gd.innerHTML = `
@@ -332,6 +334,40 @@ async function populateDashboard() {
                     <details class="group-details">
                         <summary>View Details</summary>
                         <div class="group-content">
+                            <h4>Total Spending Overview</h4>
+                            <div class="spending-summary">
+                                <div class="total-spent">
+                                    <span class="label">Total Group Spending:</span>
+                                    <span class="value">${totalSpent.toFixed(2)} SHM</span>
+                                </div>
+                            </div>
+                            
+                            <h4>Contribution Breakdown</h4>
+                            <div class="contribution-breakdown">
+                                ${cb.map(member => {
+                                    const percentage = totalSpent > 0 ? (member.totalPaid / totalSpent * 100).toFixed(1) : 0;
+                                    return `
+                                        <div class="member-contribution">
+                                            <div class="member-contribution-header">
+                                                <img src="${mas.find(m => m.addr.toLowerCase() === member.address.toLowerCase())?.avatar}" class="contribution-avatar">
+                                                <span class="member-contribution-name">${member.name}</span>
+                                                <span class="member-contribution-amount">${member.totalPaid.toFixed(2)} SHM</span>
+                                            </div>
+                                            <div class="contribution-bar-container">
+                                                <div class="contribution-bar" style="width: ${percentage}%"></div>
+                                                <span class="contribution-percentage">${percentage}%</span>
+                                            </div>
+                                            <div class="member-contribution-details">
+                                                <span>Fair share: ${member.fairShare.toFixed(2)} SHM</span>
+                                                <span class="${member.netBalance > 0 ? 'positive' : member.netBalance < 0 ? 'negative' : 'settled'}">
+                                                    Balance: ${member.netBalance > 0 ? '+' : ''}${member.netBalance.toFixed(2)} SHM
+                                                </span>
+                                            </div>
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                            
                             <h4>Members</h4>
                             <div class="members-container">
                                 ${mas.map(({ name, avatar, addr }) => `
@@ -393,9 +429,9 @@ async function populateDashboard() {
                         const tx = await contract.methods.settleDebt(gid, t, a).send({
                             from: await getAccount(),
                             value: '0',
-                            maxPriorityFeePerGas: web3.utils.toWei('2500000', 'gwei'),
-                            maxFeePerGas: web3.utils.toWei('2500000', 'gwei'),
-                            gas: 800000
+                            maxPriorityFeePerGas: web3.utils.toWei('3000000', 'gwei'),
+                            maxFeePerGas: web3.utils.toWei('3000000', 'gwei'),
+                            gas: 1000000
                         });
                         m.textContent = 'Settled! TX: ' + tx.transactionHash;
                         m.className = 'settle-message success';
@@ -758,9 +794,9 @@ async function handleCreateGroupSubmit(e) {
         const tx = await contract.methods.createGroup(gn, mems).send({
             from: await getAccount(),
             value: '0',
-            maxPriorityFeePerGas: web3.utils.toWei('2500000', 'gwei'),
-            maxFeePerGas: web3.utils.toWei('2500000', 'gwei'),
-            gas: 800000
+            maxPriorityFeePerGas: web3.utils.toWei('3000000', 'gwei'),
+            maxFeePerGas: web3.utils.toWei('3000000', 'gwei'),
+            gas: 1000000
         });
         gm.innerHTML = `<strong>Group created!</strong> <a href="https://explorer-mezame.shardeum.org/tx/${tx.transactionHash}" target="_blank">View TX</a>`;
         gm.className = 'success-message';
@@ -826,9 +862,9 @@ async function handleExpenseFormSubmit(e) {
         const tx = await contract.methods.addExpense(gid, desc, amt, st, cs).send({
             from: await getAccount(),
             value: '0',
-            maxPriorityFeePerGas: web3.utils.toWei('2500000', 'gwei'),
-            maxFeePerGas: web3.utils.toWei('2500000', 'gwei'),
-            gas: 800000
+            maxPriorityFeePerGas: web3.utils.toWei('3000000', 'gwei'),
+            maxFeePerGas: web3.utils.toWei('3000000', 'gwei'),
+            gas: 1000000
         });
         em.innerHTML = `<strong>Expense added!</strong> <a href="https://explorer-mezame.shardeum.org/tx/${tx.transactionHash}" target="_blank">View TX</a>`;
         setTimeout(() => {
